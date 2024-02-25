@@ -9,7 +9,7 @@ const getAllProducts = async (req, res) => {
     const productsZbirky = await ProductZbirky.find({})
     
     
-    if (!products) {
+    if (!products || !productsZbirky) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
@@ -52,9 +52,24 @@ const addProductZbirky = async (req, res) => {
     res.status(200).json({addResult})
 };
 
+const getAllBatterys = async (req, res) => {
+    console.log("All Batterys")
+    const battery = await Product.find({category:"battery"})
+    
+    
+    
+    if (!battery) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+     battery
+  });
+}
+
 
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
     addProduct: ctrlWrapper(addProduct),
-    addProductZbirky: ctrlWrapper(addProductZbirky)
+    addProductZbirky: ctrlWrapper(addProductZbirky),
+    getAllBatterys: ctrlWrapper(getAllBatterys)
 }

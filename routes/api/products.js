@@ -8,6 +8,7 @@ const router = express.Router();
 router.get('/', ctrl.getAllProducts);
 router.post('/', ctrl.addProduct);
 router.post('/products_zbirky', ctrl.addProductZbirky);
+router.get('/battery', ctrl.getAllBatterys);
 
 
 
