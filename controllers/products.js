@@ -81,6 +81,61 @@ const getSales = async (req, res) => {
   });
 }
 
+const getBatterys21700 = async (req, res) => {
+    console.log("Batterys 21700")
+    const battery21700 = await Product.find({ type: "21700" })
+    
+    if (!battery21700) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        battery21700
+    });
+};
+
+const getBatterys18650 = async (req, res) => {
+    console.log("Batterys 18650")
+    const battery18650 = await Product.find({ type: "18650" })
+    
+    if (!battery18650) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        battery18650
+    });
+};
+
+const getBatterys32650 = async (req, res) => {
+    console.log("Batterys 18650")
+    const battery32650 = await Product.find({ type: "32650" })
+    
+    if (!battery32650) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        battery32650
+    });
+};
+
+const getProductById = async (req, res) => {
+    console.log("getProductById")
+    
+    const { id } = req.params;
+    const product = await Product.findOne({codeOfGood: id})
+    const productZbirka = await ProductZbirky.findOne({codeOfGood: id})
+    
+    if (!product && !productZbirka) {
+        throw HttpError(401, 'Bad request');
+    }
+    if (product !== null) {
+        res.status(200).json({
+        product
+    });
+    }
+    res.status(200).json({
+        productZbirka
+    });
+};
 
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
@@ -88,5 +143,9 @@ module.exports = {
     addProductZbirky: ctrlWrapper(addProductZbirky),
     getAllBatterys: ctrlWrapper(getAllBatterys),
     getSales: ctrlWrapper(getSales),
+    getBatterys21700: ctrlWrapper(getBatterys21700),
+    getBatterys18650: ctrlWrapper(getBatterys18650),
+    getBatterys32650: ctrlWrapper(getBatterys32650),
+    getProductById: ctrlWrapper(getProductById),
 
 }
