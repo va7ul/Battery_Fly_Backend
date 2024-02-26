@@ -15,6 +15,8 @@ router.get('/battery/18650', ctrl.getBatterys18650);
 router.get('/battery/32650', ctrl.getBatterys32650);
 router.get('/batteries-for-fpv', ctrl.getBatterysFpv);
 router.get('/batteries-for-transport', ctrl.getBatterysTransport);
+router.get('/batteries-for-toys', ctrl.getBatterysToys);
+
 
 router.get('/:id', ctrl.getProductById);
 
