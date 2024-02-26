@@ -117,6 +117,18 @@ const getBatterys32650 = async (req, res) => {
     });
 };
 
+const getBatterysFpv = async (req, res) => {
+    console.log("getBatterysFpv")
+    const batterysFpv = await ProductZbirky.find({ category: "fpv" })
+    
+    if (!batterysFpv) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        batterysFpv
+    });
+};
+
 const getProductById = async (req, res) => {
     console.log("getProductById")
     
@@ -147,5 +159,7 @@ module.exports = {
     getBatterys18650: ctrlWrapper(getBatterys18650),
     getBatterys32650: ctrlWrapper(getBatterys32650),
     getProductById: ctrlWrapper(getProductById),
+    getBatterysFpv: ctrlWrapper(getBatterysFpv),
+
 
 }
