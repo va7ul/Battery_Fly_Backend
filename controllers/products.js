@@ -173,6 +173,18 @@ const getProductById = async (req, res) => {
     });
 };
 
+const getDevices = async (req, res) => {
+    console.log("getDevices")
+    const devices = await Product.find({ category: "devices" })
+    
+    if (!devices) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        devices
+    });
+};
+
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
     addProduct: ctrlWrapper(addProduct),
@@ -186,6 +198,8 @@ module.exports = {
     getBatterysFpv: ctrlWrapper(getBatterysFpv),
     getBatterysTransport: ctrlWrapper(getBatterysTransport),
     getBatterysToys: ctrlWrapper(getBatterysToys),
+    getDevices: ctrlWrapper(getDevices),
+
 
 
 
