@@ -53,6 +53,10 @@ const productSchema = new Schema(
             type: String,
             required: [true, 'Type is required']
         },
+        information: {
+            type: String,
+            required: [true, 'Information is required']
+        },
 
     },
     { versionKey: false, timestamps: true }

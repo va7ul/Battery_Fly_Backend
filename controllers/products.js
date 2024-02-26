@@ -54,7 +54,7 @@ const addProductZbirky = async (req, res) => {
 
 const getAllBatterys = async (req, res) => {
     console.log("All Batterys")
-    const battery = await Product.find({category:"battery"})
+    const battery = await Product.find({ category: "battery" })
     
     
     
@@ -62,7 +62,22 @@ const getAllBatterys = async (req, res) => {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-     battery
+        battery
+    });
+};
+
+const getSales = async (req, res) => {
+    console.log("Sales")
+    const salesProducts = await Product.find({sale: "true"})
+    const salesProductsZbirky = await ProductZbirky.find({sale: "true"})
+    
+    
+    if (!salesProducts || !salesProductsZbirky) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        salesProducts,
+        salesProductsZbirky
   });
 }
 
@@ -71,5 +86,7 @@ module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
     addProduct: ctrlWrapper(addProduct),
     addProductZbirky: ctrlWrapper(addProductZbirky),
-    getAllBatterys: ctrlWrapper(getAllBatterys)
+    getAllBatterys: ctrlWrapper(getAllBatterys),
+    getSales: ctrlWrapper(getSales),
+
 }
