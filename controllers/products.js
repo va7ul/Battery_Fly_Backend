@@ -185,6 +185,18 @@ const getDevices = async (req, res) => {
     });
 };
 
+const getMaterials = async (req, res) => {
+    console.log("getMaterials")
+    const materials = await Product.find({ category: "materials" })
+    
+    if (!materials) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        materials
+    });
+};
+
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
     addProduct: ctrlWrapper(addProduct),
@@ -199,6 +211,8 @@ module.exports = {
     getBatterysTransport: ctrlWrapper(getBatterysTransport),
     getBatterysToys: ctrlWrapper(getBatterysToys),
     getDevices: ctrlWrapper(getDevices),
+    getMaterials: ctrlWrapper(getMaterials),
+
 
 
 

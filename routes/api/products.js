@@ -17,6 +17,8 @@ router.get('/batteries-for-fpv', ctrl.getBatterysFpv);
 router.get('/batteries-for-transport', ctrl.getBatterysTransport);
 router.get('/batteries-for-toys', ctrl.getBatterysToys);
 router.get('/devices', ctrl.getDevices);
+router.get('/materials', ctrl.getMaterials);
+
 
 
 
