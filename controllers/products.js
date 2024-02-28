@@ -197,6 +197,30 @@ const getMaterials = async (req, res) => {
     });
 };
 
+const getBatterysLipo = async (req, res) => {
+    console.log("Batterys 21700")
+    const getBatterysLipo = await Product.find({ type: "li-po" })
+    
+    if (!getBatterysLipo) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        getBatterysLipo
+    });
+};
+
+const getBatterysLidepo4 = async (req, res) => {
+    console.log("Batterys 21700")
+    const getBatterysLidepo4 = await Product.find({ type: "lifepo4" })
+    
+    if (!getBatterysLidepo4) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        getBatterysLidepo4
+    });
+};
+
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
     addProduct: ctrlWrapper(addProduct),
@@ -212,6 +236,10 @@ module.exports = {
     getBatterysToys: ctrlWrapper(getBatterysToys),
     getDevices: ctrlWrapper(getDevices),
     getMaterials: ctrlWrapper(getMaterials),
+    getBatterysLipo: ctrlWrapper(getBatterysLipo),
+    getBatterysLidepo4: ctrlWrapper(getBatterysLidepo4),
+
+
 
 
 

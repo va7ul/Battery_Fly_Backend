@@ -18,6 +18,10 @@ router.get('/batteries-for-transport', ctrl.getBatterysTransport);
 router.get('/batteries-for-toys', ctrl.getBatterysToys);
 router.get('/devices', ctrl.getDevices);
 router.get('/materials', ctrl.getMaterials);
+router.get('/battery/lipo', ctrl.getBatterysLipo);
+router.get('/battery/lifepo4', ctrl.getBatterysLidepo4);
+
+
 
 
 
