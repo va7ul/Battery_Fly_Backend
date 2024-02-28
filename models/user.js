@@ -2,12 +2,11 @@ const Joi = require('joi');
 const { Schema, model } = require('mongoose');
 
 const emailRegexp = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
-const subscriptionList = ['starter', 'pro', 'business'];
 
 const registerSchema = Joi.object({
+  name: Joi.string(),
   email: Joi.string().pattern(emailRegexp).required(),
   password: Joi.string().min(6).required(),
-  subscription: Joi.string().valid(...subscriptionList),
 });
 
 const varifyEmailSchema = Joi.object({
@@ -19,24 +18,32 @@ const loginSchema = Joi.object({
   password: Joi.string().min(6).required(),
 });
 
-const updatedSubscriptionSchema = Joi.object({
-  subscription: Joi.string().valid(...subscriptionList),
-});
-
-const updateAvatar = Joi.object({
-  avatarURL: Joi.string().required(),
-});
 
 const schemas = {
   registerSchema,
   varifyEmailSchema,
   loginSchema,
-  updatedSubscriptionSchema,
-  updateAvatar,
 };
 
 const userSchema = new Schema(
   {
+    name: {
+      type: String,
+      required: [true, 'Name is required'],
+    },
+    surname: {
+      type: String,
+      default: "",
+      // required: [true, 'Surname is required'],
+    },
+    patronymic: {
+      type: String,
+      default: "",
+    },
+    tel: {
+      type: String,
+      default: ""
+    },
     email: {
       type: String,
       match: emailRegexp,
@@ -44,25 +51,28 @@ const userSchema = new Schema(
       unique: true,
       required: [true, 'Email is required'],
     },
+    orders: {
+      type: Array,
+      default: [{}],
+    },
+    delivery: {
+      type: Array,
+      default: [{}],
+    },
+    favorite: {
+      type: Array,
+      default: [],
+    },
     password: {
       type: String,
       minlength: 6,
       required: [true, 'Set password for user'],
     },
-    subscription: {
-      type: String,
-      enum: subscriptionList,
-      default: 'starter',
-    },
     token: {
       type: String,
       default: '',
     },
-    avatarURL: {
-      type: String,
-      required: true,
-    },
-    verify: {
+    validEmail: {
       type: Boolean,
       default: false,
     },
@@ -74,9 +84,10 @@ const userSchema = new Schema(
   { versionKey: false, timestamps: true }
 );
 
-const User = model('user', userSchema);
+const User = model('User', userSchema);
 
 module.exports = {
   schemas,
   User,
 };
+
