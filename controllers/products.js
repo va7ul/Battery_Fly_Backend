@@ -54,15 +54,15 @@ const addProductZbirky = async (req, res) => {
 
 const getAllBatterys = async (req, res) => {
     console.log("All Batterys")
-    const battery = await Product.find({ category: "battery" })
+    const result = await Product.find({ category: "battery" })
     
     
     
-    if (!battery) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        battery
+        result
     });
 };
 
@@ -76,148 +76,153 @@ const getSales = async (req, res) => {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
+        result: {
         salesProducts,
         salesProductsZbirky
+        }
+        
   });
 }
 
 const getBatterys21700 = async (req, res) => {
     console.log("Batterys 21700")
-    const battery21700 = await Product.find({ type: "21700" })
+    const result = await Product.find({ type: "21700" })
     
-    if (!battery21700) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        battery21700
+        result
     });
 };
 
 const getBatterys18650 = async (req, res) => {
     console.log("Batterys 18650")
-    const battery18650 = await Product.find({ type: "18650" })
+    const result = await Product.find({ type: "18650" })
     
-    if (!battery18650) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        battery18650
+        result
     });
 };
 
 const getBatterys32650 = async (req, res) => {
     console.log("Batterys 18650")
-    const battery32650 = await Product.find({ type: "32650" })
+    const result = await Product.find({ type: "32650" })
     
-    if (!battery32650) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        battery32650
+        result
     });
 };
 
 const getBatterysFpv = async (req, res) => {
     console.log("getBatterysFpv")
-    const batterysFpv = await ProductZbirky.find({ category: "fpv" })
+    const result = await ProductZbirky.find({ category: "fpv" })
     
-    if (!batterysFpv) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        batterysFpv
+        result
     });
 };
 
 const getBatterysTransport = async (req, res) => {
     console.log("getBatterysTransport")
-    const batterysTransport = await ProductZbirky.find({ category: "transport" })
+    const result = await ProductZbirky.find({ category: "transport" })
     
-    if (!batterysTransport) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        batterysTransport
+        result
     });
 };
 
 const getBatterysToys = async (req, res) => {
     console.log("getBatterysToys")
-    const batterysToys = await ProductZbirky.find({ category: "toys" })
+    const result = await ProductZbirky.find({ category: "toys" })
     
-    if (!batterysToys) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        batterysToys
+        result
     });
 };
 
 const getProductById = async (req, res) => {
     console.log("getProductById")
-    
     const { id } = req.params;
-    const product = await Product.findOne({codeOfGood: id})
+
+    const product = await Product.findOne({ codeOfGood: id })
     const productZbirka = await ProductZbirky.findOne({codeOfGood: id})
     
     if (!product && !productZbirka) {
         throw HttpError(401, 'Bad request');
     }
     if (product !== null) {
+        const result = product
         res.status(200).json({
-        product
+        result
     });
     }
+    const result = productZbirka
     res.status(200).json({
-        productZbirka
+        result
     });
 };
 
 const getDevices = async (req, res) => {
     console.log("getDevices")
-    const devices = await Product.find({ category: "devices" })
+    const result = await Product.find({ category: "devices" })
     
-    if (!devices) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        devices
+        result
     });
 };
 
 const getMaterials = async (req, res) => {
     console.log("getMaterials")
-    const materials = await Product.find({ category: "materials" })
+    const result = await Product.find({ category: "materials" })
     
-    if (!materials) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        materials
+        result
     });
 };
 
 const getBatterysLipo = async (req, res) => {
     console.log("Batterys 21700")
-    const getBatterysLipo = await Product.find({ type: "li-po" })
+    const result = await Product.find({ type: "li-po" })
     
-    if (!getBatterysLipo) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        getBatterysLipo
+        result
     });
 };
 
 const getBatterysLidepo4 = async (req, res) => {
     console.log("Batterys 21700")
-    const getBatterysLidepo4 = await Product.find({ type: "lifepo4" })
+    const result = await Product.find({ type: "lifepo4" })
     
-    if (!getBatterysLidepo4) {
+    if (!result) {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        getBatterysLidepo4
+        result
     });
 };
 
