@@ -18,11 +18,17 @@ const loginSchema = Joi.object({
   password: Joi.string().min(6).required(),
 });
 
+const addFavoriteSchema = Joi.object({
+  favorite: Joi.string()
+})
+
 
 const schemas = {
   registerSchema,
   varifyEmailSchema,
   loginSchema,
+  addFavoriteSchema,
+  
 };
 
 const userSchema = new Schema(
