@@ -21,11 +21,11 @@ const addFavorite = async (req, res) => {
 
     const result = await User.findOne({ _id })
     
-    if (result.favorite.includes(req.body.favorite)) {
+    if (result.favorite.includes(req.params.id)) {
         throw HttpError(401, 'Already favorited');
     }
 
-    result.favorite.push(req.body.favorite)
+    result.favorite.push(req.params.id)
     await result.save();
     
     if (!result) {
