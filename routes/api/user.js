@@ -6,7 +6,7 @@ const ctrl = require('../../controllers/user');
 const router = express.Router();
 
 router.get('/favorite', auth, ctrl.getFavorite);
-router.post('/favorite', auth, ctrl.addFavorite);
+router.post('/favorite/:id', auth, ctrl.addFavorite);
 
 
 
