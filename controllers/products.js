@@ -66,6 +66,20 @@ const getAllBatterys = async (req, res) => {
     });
 };
 
+const getAssemblies = async (req, res) => {
+    console.log("getAssemblies")
+    const result = await ProductZbirky.find({ })
+    
+    
+    
+    if (!result) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+        result
+    });
+};
+
 const getSales = async (req, res) => {
     console.log("Sales")
     const salesProducts = await Product.find({sale: "true"})
@@ -243,8 +257,7 @@ module.exports = {
     getMaterials: ctrlWrapper(getMaterials),
     getBatterysLipo: ctrlWrapper(getBatterysLipo),
     getBatterysLidepo4: ctrlWrapper(getBatterysLidepo4),
-
-
+    getAssemblies: ctrlWrapper(getAssemblies),
 
 
 

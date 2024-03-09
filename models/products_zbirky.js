@@ -55,12 +55,24 @@ const productSchema = new Schema(
                 type: Object,
                 description: {
                     type: String,
-                }
+                },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
+                },
             },
             ah12: {
                 type: Object,
                 description: {
                     type: String,
+                },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
                 },
             },
             ah15: {
@@ -68,11 +80,23 @@ const productSchema = new Schema(
                 description: {
                     type: String,
                 },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
+                },
             },
             ah18: {
                 type: Object,
                 description: {
                     type: String,
+                },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
                 },
             },
             ah21: {
@@ -80,17 +104,35 @@ const productSchema = new Schema(
                 description: {
                     type: String,
                 },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
+                },
             },
             ah24: {
                 type: Object,
                 description: {
                     type: String,
                 },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
+                },
             },
             ah29: {
                 type: Object,
                 description: {
                     type: String,
+                },
+                price: {
+                    type: Number
+                },
+                holder: {
+                    type: Number
                 },
             },
             required: [true, 'capacity is required']
