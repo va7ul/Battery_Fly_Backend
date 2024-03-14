@@ -137,6 +137,9 @@ const productSchema = new Schema(
             },
             required: [true, 'capacity is required']
         },
+        holder: {
+            type: Boolean,
+        },
         information: {
             type: String,
             required: [true, 'Information is required']
