@@ -36,7 +36,7 @@ const productSchema = new Schema(
             required: [true, 'Sale is required'],
             default: false
         },
-        salePrice: {
+        discount: {
             type: Number,
             required: [true, 'Sale price is required']
         },
