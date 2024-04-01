@@ -39,11 +39,22 @@ const register = async (req, res) => {
     orders: {},
 
   });
+
+  const userData = await User.findOne({ email });
+
+  const payload = { id: userData._id };
+  const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1y' });
+
+  await User.findByIdAndUpdate(userData._id, { token });
+
+
+
  
   res.status(201).json({
     user: {
       email: newUser.email,
       subscription: newUser.subscription,
+      token
     },
   });
 };
