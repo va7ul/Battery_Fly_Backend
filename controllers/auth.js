@@ -53,7 +53,8 @@ const register = async (req, res) => {
   res.status(201).json({
     user: {
       email: newUser.email,
-      subscription: newUser.subscription,
+      firstName,
+      lastName,
       token
     },
   });
@@ -125,6 +126,13 @@ const login = async (req, res) => {
     token,
     user: {
       email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      patronymic: user.patronymic,
+      tel: user.tel,
+      orders: user.orders,
+      delivery: user.delivery,
+      favorite: user.favorite,
     },
   });
 };
@@ -137,11 +145,25 @@ const logout = async (req, res) => {
 };
 
 const getCurrent = async (req, res) => {
-  const token = req.headers.authorization;
-  console.log(token)
-  // res.json({
-  //   email,
-  // });
+
+  const { email, firstName, lastName, patronymic, tel, orders, delivery, favorite, token } = req.user;
+  
+    res.status(200).json({
+    token,
+    user: {
+      email,
+      firstName,
+      lastName,
+      patronymic,
+      tel,
+      orders,
+      delivery,
+      favorite,
+    },
+  });
+  
+
+ 
 };
 
 module.exports = {
