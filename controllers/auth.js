@@ -9,7 +9,7 @@ const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
 const { SECRET_KEY, BASE_URL } = process.env;
 
 const register = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { firstName, lastName, email, password } = req.body;
   const user = await User.findOne({ email });
  
   if (user) {
