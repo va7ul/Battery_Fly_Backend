@@ -149,7 +149,6 @@ const getCurrent = async (req, res) => {
   const { email, firstName, lastName, patronymic, tel, orders, delivery, favorite, token } = req.user;
   
     res.status(200).json({
-    token,
     user: {
       email,
       firstName,
