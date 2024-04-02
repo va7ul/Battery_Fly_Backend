@@ -20,16 +20,9 @@ const register = async (req, res) => {
 
 
   const verificationToken = crypto.randomUUID();
-  console.log(verificationToken)
-  // const verifyEmail = {
-  //   to: 'vas7ul@gmail.com',
-  //   subject: 'Verify email',
-  //   html: `<a target="_blank" href="${BASE_URL}/users/verify/${verificationToken}">Click to verify your email</a>`,
-  //   text: `Click to verify your email ${BASE_URL}/users/verify/${verificationToken}`,
-  // };
 
-  // await sendEmail(verifyEmail);
 
+  
   const newUser = await User.create({
     ...req.body,
     password: passwordHash,
@@ -37,25 +30,39 @@ const register = async (req, res) => {
     favorite: [],
     delivery: {},
     orders: {},
-
+    
   });
-
+  
   const userData = await User.findOne({ email });
-
+  
   const payload = { id: userData._id };
   const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1y' });
-
+  
   await User.findByIdAndUpdate(userData._id, { token });
-
+  
+  const verifyEmail = {
+    to: email,
+    subject: 'Verify email',
+    html: `<a target="_blank" href="${BASE_URL}/users/verify/${verificationToken}">Click to verify your email</a>`,
+    text: `Click to verify your email ${BASE_URL}/users/verify/${verificationToken}`,
+  };
+  
+  await sendEmail(verifyEmail);
 
 
  
   res.status(201).json({
     token, 
     user: {
-      email: newUser.email,
-      firstName,
-      lastName,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      patronymic: user.patronymic,
+      tel: user.tel,
+      orders: user.orders,
+      delivery: user.delivery,
+      favorite: user.favorite,
+      validEmail: user.validEmail,
     },
   });
 };
@@ -133,6 +140,7 @@ const login = async (req, res) => {
       orders: user.orders,
       delivery: user.delivery,
       favorite: user.favorite,
+      validEmail: user.validEmail,
     },
   });
 };
@@ -148,7 +156,7 @@ const getCurrent = async (req, res) => {
 
   const { email, firstName, lastName, patronymic, tel, orders, delivery, favorite, token } = req.user;
   
-    res.status(200).json({
+  res.status(200).json({
     user: {
       email,
       firstName,
@@ -158,6 +166,8 @@ const getCurrent = async (req, res) => {
       orders,
       delivery,
       favorite,
+      validEmail,
+      
     },
   });
   
