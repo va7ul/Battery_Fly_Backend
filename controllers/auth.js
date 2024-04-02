@@ -6,7 +6,7 @@ const Jimp = require('jimp');
 const crypto = require('node:crypto');
 const { User } = require('../models/user');
 const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
-const { SECRET_KEY, BASE_URL } = process.env;
+const { SECRET_KEY, BASE_URL,MAIL_USER } = process.env;
 
 const register = async (req, res) => {
   const { firstName, lastName, email, password } = req.body;
@@ -41,12 +41,13 @@ const register = async (req, res) => {
   await User.findByIdAndUpdate(userData._id, { token });
   
   const verifyEmail = {
+    from: MAIL_USER,
     to: email,
     subject: 'Verify email',
     html: `<a target="_blank" href="${BASE_URL}/users/verify/${verificationToken}">Click to verify your email</a>`,
     text: `Click to verify your email ${BASE_URL}/users/verify/${verificationToken}`,
   };
-  
+
   await sendEmail(verifyEmail);
 
 
