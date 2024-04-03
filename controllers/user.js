@@ -39,18 +39,11 @@ const addFavorite = async (req, res) => {
 
 const verifyEmail = async (req, res) => {
   console.log("verifyEmail")
-  if (!req.user) {
-    throw HttpError(401, 'Bad request');
-  }
-  
-  const { verificationToken, _id } = req.user
 
-  if (!(req.params.verifyToken === verificationToken)) {
-    throw HttpError(401, 'Bad request');
-  }
+  const { verifyToken } = req.params;
 
 
-  const user = await User.findOne({ _id });
+  const user = await User.findOne({ verifyToken: verifyToken });
   if (!user) {
     throw HttpError(401, 'Bad request');
   }
