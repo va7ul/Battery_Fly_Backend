@@ -44,8 +44,8 @@ const register = async (req, res) => {
     from: MAIL_USER,
     to: email,
     subject: 'Verify email',
-    html: `<a target="_blank" href="https://va7ul.github.io/Battery_Fly_Frontend/api/user/verify/${verificationToken}">Click to verify your email</a>`,
-    text: `Click to verify your email ${BASE_URL}/users/verify/${verificationToken}`,
+    html: `<a target="_blank" href="https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}">Click to verify your email</a>`,
+    text: `Click to verify your email https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}`,
   };
 
   await sendEmail(verifyEmail);
