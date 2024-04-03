@@ -37,12 +37,40 @@ const addFavorite = async (req, res) => {
 
 };
 
+const verifyEmail = async (req, res) => {
+  console.log("verifyEmail")
+  if (!req.user) {
+    throw HttpError(401, 'Bad request');
+  }
+  
+  const { verificationToken, _id } = req.user
+
+  if (!(req.params.verifyToken === verificationToken)) {
+    throw HttpError(401, 'Bad request');
+  }
+
+
+  const user = await User.findOne({ _id });
+  if (!user) {
+    throw HttpError(401, 'Bad request');
+  }
+  user.validEmail = true;
+
+  await user.save();
+
+  res.status(200).json({
+    message: "Mail verified successfully"
+  });
+
+};
+
 
 
 
 module.exports = {
     getFavorite: ctrlWrapper(getFavorite),
     addFavorite: ctrlWrapper(addFavorite),
+    verifyEmail: ctrlWrapper(verifyEmail),
     
 
 };
