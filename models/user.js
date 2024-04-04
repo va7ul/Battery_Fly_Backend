@@ -79,7 +79,7 @@ const userSchema = new Schema(
       type: String,
       default: '',
     },
-    validEmail: {
+    verifiedEmail: {
       type: Boolean,
       default: false,
     },
