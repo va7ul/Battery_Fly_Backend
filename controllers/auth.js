@@ -66,7 +66,7 @@ const register = async (req, res) => {
     orders: newUser.orders,
     delivery: newUser.delivery,
     favorite: newUser.favorite,
-    validEmail: newUser.validEmail,
+    verifiedEmail: newUser.verifiedEmail,
   });
 };
 
@@ -99,7 +99,7 @@ const login = async (req, res) => {
     orders: user.orders,
     delivery: user.delivery,
     favorite: user.favorite,
-    validEmail: user.validEmail,
+    verifiedEmail: user.verifiedEmail,
   });
 };
 
@@ -112,7 +112,7 @@ const logout = async (req, res) => {
 
 const getCurrent = async (req, res) => {
 
-  const { email, firstName, lastName, patronymic, tel, orders, delivery, favorite, token, validEmail } = req.user;
+  const { email, firstName, lastName, patronymic, tel, orders, delivery, favorite, token, verifiedEmail } = req.user;
   
   res.status(200).json({
     token,
@@ -126,7 +126,7 @@ const getCurrent = async (req, res) => {
       orders,
       delivery,
       favorite,
-      validEmail,
+      verifiedEmail,
   });
   
 
