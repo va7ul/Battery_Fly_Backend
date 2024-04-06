@@ -1,6 +1,6 @@
 const { User } = require('../models/user');
-const { HttpError, ctrlWrapper } = require('../helpers');
-const { SECRET_KEY, BASE_URL } = process.env;
+const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
+const { MAIL_USER } = process.env;
 
 
 const getFavorite = async (req, res) => {
@@ -57,37 +57,40 @@ const verifyEmail = async (req, res) => {
 
 };
 
-// const resendVerifyEmail = async (req, res) => {
-//   const { email } = req.body;
-//   const user = await User.findOne({ email });
-//   if (!user) {
-//     throw HttpError(404, 'Email not found');
-//   }
+const resendVerifyEmail = async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw HttpError(404, 'Email not found');
+  }
 
-//   if (user.verify) {
-//     throw HttpError(400, 'Verification has already been passed');
-//   }
+  if (user.verify) {
+    throw HttpError(400, 'Verification has already been passed');
+  }
 
-//   const verifyEmail = {
-//     to: 'vas7ul@gmail.com',
-//     subject: 'Verify email',
-//     html: `<a target="_blank" href="${BASE_URL}/users/verify/${user.verificationToken}">Click to verify your email</a>`,
-//     text: `Click to verify your email ${BASE_URL}/users/verify/${user.verificationToken}`,
-//   };
+  const verifyEmail = {
+    from: MAIL_USER,
+    to: email,
+    subject: 'Verify email',
+    html: `<a target="_blank" href="https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}">Click to verify your email</a>`,
+    text: `Click to verify your email https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}`,
+  };
 
-//   await sendEmail(verifyEmail);
+  await sendEmail(verifyEmail);
 
-//   res.status(200).json({
-//     message: 'Verification email sent',
-//   });
-// };
+  res.status(200).json({
+    message: 'Verification email sent',
+  });
+};
 
 
 
 module.exports = {
-    getFavorite: ctrlWrapper(getFavorite),
-    addFavorite: ctrlWrapper(addFavorite),
-    verifyEmail: ctrlWrapper(verifyEmail),
+  getFavorite: ctrlWrapper(getFavorite),
+  addFavorite: ctrlWrapper(addFavorite),
+  verifyEmail: ctrlWrapper(verifyEmail),
+  resendVerifyEmail: ctrlWrapper(resendVerifyEmail),
+    
     
 
 };
