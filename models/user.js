@@ -20,7 +20,7 @@ const loginSchema = Joi.object({
 });
 
 const addFavoriteSchema = Joi.object({
-  favorite: Joi.string()
+  favorites: Joi.string()
 })
 
 
@@ -66,7 +66,7 @@ const userSchema = new Schema(
       type: Array,
       default: [{}],
     },
-    favorite: {
+    favorites: {
       type: Array,
       default: [],
     },
