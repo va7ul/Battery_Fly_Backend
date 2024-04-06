@@ -84,13 +84,14 @@ const verifyEmail = async (req, res) => {
 };
 
 const resendVerifyEmail = async (req, res) => {
-  const { email } = req.body;
+  const { email } = req.user;
+  
   const user = await User.findOne({ email });
   if (!user) {
     throw HttpError(404, 'Email not found');
   }
 
-  if (user.verify) {
+  if (user.verifiedEmail) {
     throw HttpError(400, 'Verification has already been passed');
   }
 
@@ -98,8 +99,8 @@ const resendVerifyEmail = async (req, res) => {
     from: MAIL_USER,
     to: email,
     subject: 'Verify email',
-    html: `<a target="_blank" href="https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}">Click to verify your email</a>`,
-    text: `Click to verify your email https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}`,
+    html: `<a target="_blank" href="https://battery-fly-backend.onrender.com/api/user/verify/${user.verificationToken}">Click to verify your email</a>`,
+    text: `Click to verify your email https://battery-fly-backend.onrender.com/api/user/verify/${user.verificationToken}`,
   };
 
   await sendEmail(verifyEmail);
