@@ -8,6 +8,8 @@ const router = express.Router();
 router.get('/favorite', auth, ctrl.getFavorite);
 router.post('/favorite/:id', auth, ctrl.addFavorite);
 router.get('/verify/:verifyToken', ctrl.verifyEmail);
+router.get('/resend', auth ,ctrl.resendVerifyEmail);
+
 
 
 
