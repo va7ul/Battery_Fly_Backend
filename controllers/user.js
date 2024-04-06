@@ -37,6 +37,32 @@ const addFavorite = async (req, res) => {
 
 };
 
+const deleteFavorite = async (req, res) => {
+    console.log("deleteFavorite")
+
+    const {_id} = req.user;
+
+    const result = await User.findOne({ _id })
+    
+    if (!result.favorites.includes(req.params.id)) {
+        throw HttpError(401, 'This product is not in favorites');
+    }
+
+    const newFavorite = result.favorites.filter(item => item !== req.params.id)
+  
+    result.favorites = newFavorite;
+
+    await result.save();
+    
+    if (!result) {
+      throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+      favorites: result.favorites
+  });
+
+};
+
 const verifyEmail = async (req, res) => {
   console.log("verifyEmail")
 
@@ -90,6 +116,8 @@ module.exports = {
   addFavorite: ctrlWrapper(addFavorite),
   verifyEmail: ctrlWrapper(verifyEmail),
   resendVerifyEmail: ctrlWrapper(resendVerifyEmail),
+  deleteFavorite: ctrlWrapper(deleteFavorite),
+
     
     
 
