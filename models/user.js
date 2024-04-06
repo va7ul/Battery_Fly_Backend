@@ -63,8 +63,8 @@ const userSchema = new Schema(
       default: [{}],
     },
     delivery: {
-      type: Array,
-      default: [{}],
+      type: Object,
+      default: {},
     },
     favorites: {
       type: Array,
