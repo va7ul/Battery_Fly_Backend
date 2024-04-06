@@ -73,7 +73,7 @@ const verifyEmail = async (req, res) => {
   if (!user) {
     throw HttpError(401, 'Bad request');
   }
-  user.validEmail = true;
+  user.verifiedEmail = true;
 
   await user.save();
 
