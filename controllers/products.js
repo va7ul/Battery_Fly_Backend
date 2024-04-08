@@ -13,9 +13,11 @@ const getAllProducts = async (req, res) => {
         throw HttpError(401, 'Bad request');
     }
     res.status(200).json({
-        products,
-        productsZbirky
-  });
+      result: {
+        ...products,
+        ...productsZbirky,
+      }
+    });
 }
 
 const addProduct = async (req, res) => {
@@ -91,8 +93,8 @@ const getSales = async (req, res) => {
     }
     res.status(200).json({
         result: {
-        salesProducts,
-        salesProductsZbirky
+        ...salesProducts,
+        ...salesProductsZbirky
         }
         
   });
