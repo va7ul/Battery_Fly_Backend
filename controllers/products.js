@@ -243,8 +243,8 @@ const getBatterysLidepo4 = async (req, res) => {
 
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
-    addProduct: ctrlWrapper(addProduct),
-    addProductZbirky: ctrlWrapper(addProductZbirky),
+    // addProduct: ctrlWrapper(addProduct),
+    // addProductZbirky: ctrlWrapper(addProductZbirky),
     getAllBatterys: ctrlWrapper(getAllBatterys),
     getSales: ctrlWrapper(getSales),
     getBatterys21700: ctrlWrapper(getBatterys21700),
