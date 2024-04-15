@@ -5,8 +5,8 @@ const ctrl = require('../../controllers/orders');
 
 const router = express.Router();
 
-router.post('/getDeliveryCity', auth, ctrl.getDeliveryCity);
-router.post('/getWarehouses', auth, ctrl.getWarehouses);
+router.post('/getDeliveryCity', ctrl.getDeliveryCity);
+router.post('/getWarehouses', ctrl.getWarehouses);
 
 
 
