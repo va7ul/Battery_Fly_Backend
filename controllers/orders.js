@@ -53,7 +53,7 @@ const getWarehouses = async (req, res) => {
           
       const result = response.data.data.map(item => item.Description)
       res.status(200).json({
-          cities: result
+          werehouses: result
       });
   })
   .catch(function () {
