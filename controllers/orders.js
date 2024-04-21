@@ -127,10 +127,26 @@ const getOrders = async (req, res) => {
       });
 }
 
+const getOrderById = async (req, res) => {
+    console.log(req.user.email)
+    console.log(req.params.id)
+    const order = await Order.findOne({numberOfOrder: req.params.id});
+
+    if(req.user.email !== order.email){
+        throw HttpError(401, 'Bad request');
+    }
+
+    res.status(200).json({
+        result: order
+      });
+}
+
 module.exports = {
     getDeliveryCity: ctrlWrapper(getDeliveryCity),
     getWarehouses: ctrlWrapper(getWarehouses),
     addOrder: ctrlWrapper(addOrder),
     getOrders: ctrlWrapper(getOrders),
+    getOrderById: ctrlWrapper(getOrderById),
+
 
 };
