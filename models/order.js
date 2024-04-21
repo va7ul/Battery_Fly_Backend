@@ -27,7 +27,7 @@ const orderSchema = new Schema(
     {   
         status: {
             type: String,
-            default: 'Новий'
+            default: 'Нове'
         },
         numberOfOrder: {
             type: String,
