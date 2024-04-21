@@ -100,18 +100,30 @@ const addOrder = async (req, res) => {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
     
-    const user = await User.findOne({email})
-    await user.orders.push(finalyOrder);
-
-    const userResult = await user.save();
-
-    if (!userResult) {
-        throw HttpError(500, 'Internal server error, write order for user');
-    }
-
-
     res.status(200).json({
-        user: userResult
+        message: "Order is accepted"
+      });
+}
+
+const getOrders = async (req, res) => {
+    console.log(req.user.email)
+    const orders = await Order.find({email: req.user.email});
+
+    console.log(orders)
+
+    const result = orders.map(order => {
+        return {
+            numberOfOrder: order.numberOfOrder,
+            date: order.createdAt,
+            total: order.total,
+            status: order.status
+        }
+    })
+    
+
+    
+    res.status(200).json({
+        result
       });
 }
 
@@ -119,4 +131,6 @@ module.exports = {
     getDeliveryCity: ctrlWrapper(getDeliveryCity),
     getWarehouses: ctrlWrapper(getWarehouses),
     addOrder: ctrlWrapper(addOrder),
+    getOrders: ctrlWrapper(getOrders),
+
 };
