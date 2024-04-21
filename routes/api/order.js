@@ -8,6 +8,8 @@ const router = express.Router();
 router.post('/getDeliveryCity', ctrl.getDeliveryCity);
 router.post('/getWarehouses', ctrl.getWarehouses);
 router.post('/add-order',validateBody(schemas.addOrder), ctrl.addOrder);
+router.get('/get-orders', auth, ctrl.getOrders);
+
 
 
 

@@ -60,7 +60,7 @@ const userSchema = new Schema(
     },
     orders: {
       type: Array,
-      default: [{}],
+      default: [],
     },
     delivery: {
       type: Object,

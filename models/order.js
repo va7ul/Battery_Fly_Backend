@@ -24,7 +24,11 @@ const schemas = {
 }
 
 const orderSchema = new Schema(
-    {
+    {   
+        status: {
+            type: String,
+            default: 'Новий'
+        },
         numberOfOrder: {
             type: String,
             unique: true,
