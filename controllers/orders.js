@@ -111,7 +111,7 @@ const addOrder = async (req, res) => {
 
 
     res.status(200).json({
-        order
+        user: userResult
       });
 }
 
