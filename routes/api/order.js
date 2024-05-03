@@ -10,6 +10,7 @@ router.post('/getWarehouses', ctrl.getWarehouses);
 router.post('/add-order',validateBody(schemas.addOrder), ctrl.addOrder);
 router.get('/get-orders', auth, ctrl.getOrders);
 router.get('/get-order/:id', auth, ctrl.getOrderById);
+router.get('/promo-code/:name',auth, ctrl.getPromoCode);
 
 
 

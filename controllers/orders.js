@@ -2,6 +2,7 @@ const { ctrlWrapper, HttpError } = require('../helpers');
 const { NOVA_POST } = process.env;
 
 const axios = require('axios');
+const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 const { User } = require('../models/user');
@@ -141,12 +142,30 @@ const getOrderById = async (req, res) => {
       });
 }
 
+const getPromoCode = async (req, res) => {
+
+    const promoCode = await PromoCode.findOne({name: req.params.name});
+
+    if(!promoCode){
+        throw HttpError(401, 'Bad request');
+    }
+
+    if (promoCode.valid) {
+        res.status(200).json({
+        promoCode
+        });
+    }
+
+}
+
 module.exports = {
     getDeliveryCity: ctrlWrapper(getDeliveryCity),
     getWarehouses: ctrlWrapper(getWarehouses),
     addOrder: ctrlWrapper(addOrder),
     getOrders: ctrlWrapper(getOrders),
     getOrderById: ctrlWrapper(getOrderById),
+    getPromoCode: ctrlWrapper(getPromoCode),
+
 
 
 };

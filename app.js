@@ -7,6 +7,7 @@ const authRouter = require('./routes/api/auth');
 const productsRouter = require('./routes/api/products')
 const userRouter = require('./routes/api/user')
 const orderRouter = require('./routes/api/order')
+const price3dRouter = require('./routes/api/price3d')
 
 const app = express();
 
@@ -18,6 +19,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/user', userRouter)
 app.use('/api/order', orderRouter)
+app.use('/api/3dprices', price3dRouter)
+
+
 
 
 
