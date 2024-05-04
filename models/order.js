@@ -61,8 +61,7 @@ const orderSchema = new Schema(
             required: [true, 'Total is required']
         },
         promoCode: {
-            type: String,
-            required: [true, 'promoCode is required']  
+            type: String, 
         },
         discountValue: {
             type: Number,

@@ -6,7 +6,7 @@ const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 const { User } = require('../models/user');
-const { QuickOrder } = require('../models/quickOrders');
+const { QuickOrder } = require('../models/quickOrder');
 axios.defaults.baseURL = "https://api.novaposhta.ua/v2.0/json/"
 
 const getDeliveryCity = async (req, res) => {

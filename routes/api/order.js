@@ -1,7 +1,7 @@
 const express = require('express');
 const { validateBody, auth, upload } = require('../../middlewares');
 const { schemas } = require('../../models/order');
-const {schemasOrder} = require('../../models/quickOrders')
+const {schemasOrder} = require('../../models/quickOrder')
 const ctrl = require('../../controllers/orders');
 
 const router = express.Router();
