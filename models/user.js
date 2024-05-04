@@ -83,6 +83,9 @@ const userSchema = new Schema(
       type: String,
       required: [true, 'Verify token is required'],
     },
+    promoCodes: {
+      type: Array
+    }
   },
   { versionKey: false, timestamps: true }
 );

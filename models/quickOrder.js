@@ -7,7 +7,6 @@ const addQuickOrder = Joi.object({
         name: Joi.string().required(),
         tel: Joi.string().required(),
         userName: Joi.string().required(),
-        
   });
 
 const schemasOrder = {

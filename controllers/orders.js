@@ -100,6 +100,19 @@ const addOrder = async (req, res) => {
         payment
     }
     const order = await Order.create({ ...finalyOrder })
+
+    if (promoCode) {
+
+        const promo = await PromoCode.findOne({ name: promoCode })
+        console.log(promo)
+        if (promo) {
+            const user = await User.findOne({ email });
+            user.promoCodes.push(promoCode);
+            await user.save();
+        }
+        
+        
+    }
     
     if (!order) {
         throw HttpError(500, 'Internal server error, write order in DB');
