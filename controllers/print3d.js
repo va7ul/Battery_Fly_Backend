@@ -3,7 +3,7 @@ const { HttpError, ctrlWrapper } = require('../helpers');
 
 const get3dPrint = async (req, res) => {
     console.log("get3dPrint")
-    const print3d = await Print3d.find({})
+    const print3d = await Print3d.findOne({})
     
     if (!print3d) {
         throw HttpError(401, 'Bad request');
