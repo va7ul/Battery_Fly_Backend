@@ -9,7 +9,7 @@ const addOrder = Joi.object({
         firstName: Joi.string().required(),
         lastName: Joi.string().required(),
         email: Joi.string().pattern(emailRegexp).required(),
-        text: Joi.string(),
+        text: Joi.string().allow(""),
         tel: Joi.string().required(),}).required(),
     total: Joi.number(),
     cartItems: Joi.array().required(),
@@ -47,6 +47,7 @@ const orderSchema = new Schema(
         },
         comment: {
             type: String,
+            default: ""
         },
         tel: {
             type: String,
