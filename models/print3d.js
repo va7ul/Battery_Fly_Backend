@@ -159,6 +159,17 @@ const Print3dSchema = new Schema({
     "information": {
         type: String,
     },
+    "accuracy": {
+        type: Array,
+    },
+    "plactic": {
+        type: Array,
+    },
+    "color": {
+        type: Array,
+    },
+    
+
 },
     { versionKey: false, timestamps: true }
 );
