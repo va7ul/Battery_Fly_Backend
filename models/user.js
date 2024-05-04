@@ -58,10 +58,6 @@ const userSchema = new Schema(
       unique: true,
       required: [true, 'Email is required'],
     },
-    orders: {
-      type: Array,
-      default: [],
-    },
     delivery: {
       type: Object,
       default: {},

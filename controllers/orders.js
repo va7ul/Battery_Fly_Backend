@@ -101,14 +101,7 @@ const addOrder = async (req, res) => {
     }
     const order = await Order.create({ ...finalyOrder })
     
-    const user = await User.findOne({ email })
-
-    user.orders.push(numberOfOrder)
-
-    const save = await user.save();
-    
-
-    if (!order || !save) {
+    if (!order) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
     
