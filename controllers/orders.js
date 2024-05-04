@@ -6,6 +6,7 @@ const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 const { User } = require('../models/user');
+const { QuickOrder } = require('../models/quickOrders');
 axios.defaults.baseURL = "https://api.novaposhta.ua/v2.0/json/"
 
 const getDeliveryCity = async (req, res) => {
@@ -168,6 +169,40 @@ const getPromoCode = async (req, res) => {
 
 }
 
+const addQuickOrder = async (req, res) => {
+    console.log("addQuickOrder")
+
+    const number = await NumberOfOrders.findOne({})
+    const numberOfOrder = number.numberOrder +=1;
+
+    const result = await number.save();
+    
+    if (!result) {
+                throw HttpError(500, 'Internal server error, write orderNumber in DB');
+            }
+
+    const {name,userName,email, tel, codeOfGood} = req.body;
+
+    const finalyOrder = {
+        numberOfOrder,
+        userName,
+        email,
+        tel,
+        codeOfGood,
+        name
+    };
+    const quickOrder = await QuickOrder.create({ ...finalyOrder })
+        
+
+    if (!quickOrder) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
+    
+    res.status(200).json({
+        message: "Quick order is accepted"
+      });
+}
+
 module.exports = {
     getDeliveryCity: ctrlWrapper(getDeliveryCity),
     getWarehouses: ctrlWrapper(getWarehouses),
@@ -175,7 +210,5 @@ module.exports = {
     getOrders: ctrlWrapper(getOrders),
     getOrderById: ctrlWrapper(getOrderById),
     getPromoCode: ctrlWrapper(getPromoCode),
-
-
-
+    addQuickOrder: ctrlWrapper(addQuickOrder),
 };
