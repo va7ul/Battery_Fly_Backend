@@ -113,7 +113,7 @@ const addOrder = async (req, res) => {
     }
     
     res.status(200).json({
-        message: "Order is accepted"
+        orderNum: numberOfOrder
       });
 }
 
