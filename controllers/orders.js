@@ -69,7 +69,7 @@ const getWarehouses = async (req, res) => {
 
 const addOrder = async (req, res) => {
     console.log("addOrder")
-    
+
     const number = await NumberOfOrders.findOne({})
     const numberOfOrder = number.numberOrder +=1;
 
@@ -98,9 +98,16 @@ const addOrder = async (req, res) => {
         warehouse, 
         payment
     }
-    const order = await Order.create({...finalyOrder})
+    const order = await Order.create({ ...finalyOrder })
+    
+    const user = await User.findOne({ email })
 
-    if (!order) {
+    user.orders.push(numberOfOrder)
+
+    const save = await user.save();
+    
+
+    if (!order || !save) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
     
