@@ -80,7 +80,7 @@ const addOrder = async (req, res) => {
                 throw HttpError(500, 'Internal server error, write orderNumber in DB');
             }
 
-    const {userData:{firstName, lastName, email, text, tel}, total, cartItems, deliveryType, city, warehouse, payment, promoCode, discountValue, together} = req.body;
+    const {userData:{firstName, lastName, email, text, tel}, total, cartItems, deliveryType, city, warehouse, payment, promoCode, promoCodeDiscount, discountValue, together} = req.body;
 
     const finalyOrder = {
         numberOfOrder,
@@ -91,6 +91,7 @@ const addOrder = async (req, res) => {
         tel, 
         total, 
         promoCode,
+        promoCodeDiscount,
         discountValue,
         together,
         cartItems, 

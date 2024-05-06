@@ -13,6 +13,7 @@ const addOrder = Joi.object({
         tel: Joi.string().required(),}).required(),
     total: Joi.number(),
     promoCode: Joi.string().allow(""),
+    promoCodeDiscount: Joi.number().required(),
     discountValue: Joi.number().required(),
     together: Joi.number().required(),
     cartItems: Joi.array().required(),
@@ -62,6 +63,10 @@ const orderSchema = new Schema(
         },
         promoCode: {
             type: String, 
+        },
+        promoCodeDiscount: {
+            type: Number,
+            required: [true, 'promoCodeDiscount is required']  
         },
         discountValue: {
             type: Number,
