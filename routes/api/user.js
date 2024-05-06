@@ -9,7 +9,9 @@ router.get('/favorite', auth, ctrl.getFavorite);
 router.post('/favorite/:id', auth, ctrl.addFavorite);
 router.delete('/favorite/:id', auth, ctrl.deleteFavorite);
 router.get('/verify/:verifyToken', ctrl.verifyEmail);
-router.get('/resend', auth ,ctrl.resendVerifyEmail);
+router.get('/resend', auth, ctrl.resendVerifyEmail);
+router.post('/change-info', auth, ctrl.changeUserInfo);
+
 
 
 

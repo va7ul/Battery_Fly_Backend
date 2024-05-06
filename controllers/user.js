@@ -6,7 +6,7 @@ const { MAIL_USER } = process.env;
 const getFavorite = async (req, res) => {
     console.log("getFavorite")
     if (!req.user) {
-      throw HttpError(401, 'Bad request');
+      throw HttpError(400, 'Bad request');
     }
     res.status(200).json({
         favorite: req.user.favorite
@@ -22,14 +22,14 @@ const addFavorite = async (req, res) => {
     const result = await User.findOne({ _id })
     
     if (result.favorites.includes(req.params.id)) {
-        throw HttpError(401, 'Already in favorite');
+        throw HttpError(400, 'Already in favorite');
     }
 
     result.favorites.push(req.params.id)
     await result.save();
     
     if (!result) {
-      throw HttpError(401, 'Bad request');
+      throw HttpError(400, 'Bad request');
     }
     res.status(200).json({
         favorites: result.favorites
@@ -45,7 +45,7 @@ const deleteFavorite = async (req, res) => {
     const result = await User.findOne({ _id })
     
     if (!result.favorites.includes(req.params.id)) {
-        throw HttpError(401, 'This product is not in favorites');
+        throw HttpError(400, 'This product is not in favorites');
     }
 
     const newFavorite = result.favorites.filter(item => item !== req.params.id)
@@ -55,7 +55,7 @@ const deleteFavorite = async (req, res) => {
     await result.save();
     
     if (!result) {
-      throw HttpError(401, 'Bad request');
+      throw HttpError(400, 'Bad request');
     }
     res.status(200).json({
       favorites: result.favorites
@@ -71,7 +71,7 @@ const verifyEmail = async (req, res) => {
   const user = await User.findOne({ verificationToken: verifyToken });
 
   if (!user) {
-    throw HttpError(401, 'Bad request');
+    throw HttpError(400, 'Bad request');
   }
   user.verifiedEmail = true;
 
@@ -88,7 +88,7 @@ const resendVerifyEmail = async (req, res) => {
   
   const user = await User.findOne({ email });
   if (!user) {
-    throw HttpError(404, 'Email not found');
+    throw HttpError(400, 'Email not found');
   }
 
   if (user.verifiedEmail) {
@@ -110,17 +110,30 @@ const resendVerifyEmail = async (req, res) => {
   });
 };
 
-
-
 const changeUserInfo = async (req, res) => {
-    console.log("changeUserInfo")
-    if (!req.user) {
-      throw HttpError(401, 'Bad request');
-  }
+  console.log("changeUserInfo")
   
+    if (!req.user) {
+      throw HttpError(400, 'Bad request');
+  }
+
+  const { firstName, lastName, patronymic, tel } = req.body;
+
+  const updateUser = await User.findOneAndUpdate({email: req.user.email}, {firstName, lastName, patronymic, tel}, {new:true})
+  
+  if (!updateUser) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
+  
+  const result = {
+    firstName: updateUser.firstName,
+    lastName: updateUser.lastName,
+    patronymic: updateUser.patronymic,
+    tel: updateUser.tel
+  }
 
     res.status(200).json({
-        
+        result
   });
 
 };
@@ -133,6 +146,8 @@ module.exports = {
   verifyEmail: ctrlWrapper(verifyEmail),
   resendVerifyEmail: ctrlWrapper(resendVerifyEmail),
   deleteFavorite: ctrlWrapper(deleteFavorite),
+  changeUserInfo: ctrlWrapper(changeUserInfo),
+
 
     
     
