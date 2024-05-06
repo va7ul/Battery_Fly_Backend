@@ -134,7 +134,7 @@ const getOrders = async (req, res) => {
         return {
             numberOfOrder: order.numberOfOrder,
             date: order.createdAt,
-            total: order.total,
+            together: order.together,
             status: order.status
         }
     })
