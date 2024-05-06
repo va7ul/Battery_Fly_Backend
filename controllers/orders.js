@@ -105,7 +105,7 @@ const addOrder = async (req, res) => {
     if (promoCode) {
 
         const promo = await PromoCode.findOne({ name: promoCode })
-        console.log(promo)
+        
         if (promo) {
             const user = await User.findOne({ email });
             user.promoCodes.push(promoCode);
@@ -166,14 +166,11 @@ const getPromoCode = async (req, res) => {
     
     const user = req.user;
 
-    console.log(user)
-
     if(!promoCode){
         throw HttpError(400, 'Bad request');
     }
 
     const usesPromo = user.promoCodes.find(item => item === req.params.name)
-    console.log(usesPromo)
 
     if (promoCode.valid && !usesPromo) {
         res.status(200).json({
