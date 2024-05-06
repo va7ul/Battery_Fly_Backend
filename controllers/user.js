@@ -1,3 +1,4 @@
+const bcrypt = require('bcrypt');
 const { User } = require('../models/user');
 const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
 const { MAIL_USER } = process.env;
@@ -138,6 +139,38 @@ const changeUserInfo = async (req, res) => {
 
 };
 
+const changePassword = async (req, res) => {
+  console.log("changePassword")
+  
+    if (!req.user) {
+      throw HttpError(400, 'Bad request');
+  }
+
+  const { password, newPassword } = req.body;
+  const user = await User.findOne({email: req.user.email})
+  
+  if (!user) {
+      throw HttpError(400, 'Bad request');
+  }
+  
+  const passwordCompare = await bcrypt.compare(password, user.password);
+  if (!passwordCompare) {
+    throw HttpError(401, 'Email or password is wrong');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  user.password = passwordHash;
+  const result = await user.save();
+
+  if (!result) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
+
+    res.status(200).json({
+      message: "Password change successfully"
+  });
+
+};
 
 
 module.exports = {
@@ -147,6 +180,8 @@ module.exports = {
   resendVerifyEmail: ctrlWrapper(resendVerifyEmail),
   deleteFavorite: ctrlWrapper(deleteFavorite),
   changeUserInfo: ctrlWrapper(changeUserInfo),
+  changePassword: ctrlWrapper(changePassword),
+
 
 
     

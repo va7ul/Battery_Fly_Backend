@@ -11,9 +11,7 @@ router.delete('/favorite/:id', auth, ctrl.deleteFavorite);
 router.get('/verify/:verifyToken', ctrl.verifyEmail);
 router.get('/resend', auth, ctrl.resendVerifyEmail);
 router.post('/change-info', auth, ctrl.changeUserInfo);
-
-
-
+router.post('/change-password', auth, ctrl.changePassword);
 
 
 
