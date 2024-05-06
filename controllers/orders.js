@@ -152,7 +152,7 @@ const getOrderById = async (req, res) => {
     const order = await Order.findOne({numberOfOrder: req.params.id});
 
     if(req.user.email !== order.email){
-        throw HttpError(401, 'Bad request');
+        throw HttpError(400, 'Bad request');
     }
 
     res.status(200).json({
@@ -165,7 +165,7 @@ const getPromoCode = async (req, res) => {
     const promoCode = await PromoCode.findOne({name: req.params.name});
 
     if(!promoCode){
-        throw HttpError(401, 'Bad request');
+        throw HttpError(400, 'Bad request');
     }
 
     if (promoCode.valid) {
