@@ -152,7 +152,7 @@ const getOrderById = async (req, res) => {
     const order = await Order.findOne({numberOfOrder: req.params.id});
 
     if(req.user.email !== order.email){
-        throw HttpError(401, 'Bad request');
+        throw HttpError(400, 'Bad request');
     }
 
     res.status(200).json({
@@ -162,18 +162,33 @@ const getOrderById = async (req, res) => {
 
 const getPromoCode = async (req, res) => {
 
-    const promoCode = await PromoCode.findOne({name: req.params.name});
+    const promoCode = await PromoCode.findOne({ name: req.params.name });
+    
+    const user = req.user;
+
+    console.log(user)
 
     if(!promoCode){
-        throw HttpError(401, 'Bad request');
+        throw HttpError(400, 'Bad request');
     }
 
-    if (promoCode.valid) {
+    const usesPromo = user.promoCodes.find(item => item === req.params.name)
+    console.log(usesPromo)
+
+    if (promoCode.valid && !usesPromo) {
         res.status(200).json({
         promoCode
         });
     }
+    if (promoCode.valid && usesPromo) {
+        throw HttpError(409, 'promoCode already in use');
+    }
 
+    if (!promoCode.valid) {
+        res.status(200).json({
+            promoCode: { valid: false }
+        });
+    }
 }
 
 const addQuickOrder = async (req, res) => {
