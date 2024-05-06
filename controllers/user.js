@@ -112,6 +112,21 @@ const resendVerifyEmail = async (req, res) => {
 
 
 
+const changeUserInfo = async (req, res) => {
+    console.log("changeUserInfo")
+    if (!req.user) {
+      throw HttpError(401, 'Bad request');
+  }
+  
+
+    res.status(200).json({
+        
+  });
+
+};
+
+
+
 module.exports = {
   getFavorite: ctrlWrapper(getFavorite),
   addFavorite: ctrlWrapper(addFavorite),
