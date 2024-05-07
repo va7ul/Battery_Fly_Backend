@@ -173,6 +173,8 @@ const changePassword = async (req, res) => {
 };
 
 
+
+
 module.exports = {
   getFavorite: ctrlWrapper(getFavorite),
   addFavorite: ctrlWrapper(addFavorite),
@@ -181,10 +183,6 @@ module.exports = {
   deleteFavorite: ctrlWrapper(deleteFavorite),
   changeUserInfo: ctrlWrapper(changeUserInfo),
   changePassword: ctrlWrapper(changePassword),
-
-
-
-    
     
 
 };

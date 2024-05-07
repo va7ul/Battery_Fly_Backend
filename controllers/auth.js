@@ -1,4 +1,5 @@
 const bcrypt = require('bcrypt');
+const generator = require('generate-password');
 const jwt = require('jsonwebtoken');
 const path = require('node:path');
 const fs = require('node:fs/promises');
@@ -135,9 +136,52 @@ const getCurrent = async (req, res) => {
   });
 };
 
+const forgotPassword = async (req, res) => {
+  console.log("resetPassword")
+  
+  const {email} = req.body
+  const user = await User.findOne({email})
+  
+  if (!user) {
+      throw HttpError(400, 'Bad request');
+  }
+
+  const password = generator.generate({
+	length: 10,
+	numbers: true
+  });
+  console.log(password)
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  user.password = passwordHash;
+  const result = await user.save();
+
+  if (!result) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+  };
+  
+  const verifyEmail = {
+    from: MAIL_USER,
+    to: email,
+    subject: 'Reset password',
+    html: `<p>Ваш новий пароль: ${password}</p>`,
+    text: `Заходьте на сайт з новим паролем. Цей пароль постійник, але Ви можете його змінити в особистому кабінеті `,
+  };
+    await sendEmail(verifyEmail);
+
+    res.status(200).json({
+      message: "Password reset successfully"
+  });
+
+};
+
+
+
 module.exports = {
   register: ctrlWrapper(register),
   login: ctrlWrapper(login),
   logout: ctrlWrapper(logout),
   getCurrent: ctrlWrapper(getCurrent),
+  forgotPassword: ctrlWrapper(forgotPassword),
+
 };
