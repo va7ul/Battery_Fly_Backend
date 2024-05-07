@@ -20,6 +20,8 @@ router.post('/signin', validateBody(schemas.loginSchema), ctrl.login);
 router.post('/logout', auth, ctrl.logout);
 
 router.get('/current', auth, ctrl.getCurrent);
+router.post('/forgot-password', ctrl.forgotPassword);
+
 
 
 module.exports = router;

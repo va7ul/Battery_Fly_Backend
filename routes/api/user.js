@@ -14,5 +14,4 @@ router.post('/change-info', auth, ctrl.changeUserInfo);
 router.post('/change-password', auth, ctrl.changePassword);
 
 
-
 module.exports = router;
