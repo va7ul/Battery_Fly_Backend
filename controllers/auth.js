@@ -164,8 +164,9 @@ const forgotPassword = async (req, res) => {
     from: MAIL_USER,
     to: email,
     subject: 'Reset password',
-    html: `<p>Ваш новий пароль: ${password}</p>`,
-    text: `Заходьте на сайт з новим паролем. Цей пароль постійник, але Ви можете його змінити в особистому кабінеті `,
+    html: `<p>Ваш новий пароль: ${password}</p></br>
+    Заходьте на сайт з новим паролем. Цей пароль постійник, але Ви можете його змінити в особистому кабінеті`,
+   
   };
     await sendEmail(verifyEmail);
 
