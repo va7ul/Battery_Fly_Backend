@@ -47,8 +47,8 @@ const getWarehouses = async (req, res) => {
         "methodProperties": {
             "FindByString": "",
             "CityName": req.body.query,
-            "Page": "1",
-            "Limit": "50",
+            // "Page": "1",
+            // "Limit": "50",
             "Language": "UA"
         }
     };
