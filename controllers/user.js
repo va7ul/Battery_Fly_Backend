@@ -172,6 +172,28 @@ const changePassword = async (req, res) => {
 
 };
 
+const changeUserDeliveryInfo = async (req, res) => {
+  console.log("changeUserDeliveryInfo")
+  
+    if (!req.user) {
+      throw HttpError(400, 'Bad request');
+  }
+
+  const { email } = req.user;
+  const { delivery } = req.body;
+
+  const updateUser = await User.findOneAndUpdate({email}, {delivery}, {new: true})
+  
+  if (!updateUser) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
+  
+    res.status(200).json({
+        delivery: updateUser.delivery
+  });
+
+};
+
 
 
 
@@ -183,6 +205,8 @@ module.exports = {
   deleteFavorite: ctrlWrapper(deleteFavorite),
   changeUserInfo: ctrlWrapper(changeUserInfo),
   changePassword: ctrlWrapper(changePassword),
+  changeUserDeliveryInfo: ctrlWrapper(changeUserDeliveryInfo),
+
     
 
 };

@@ -12,6 +12,8 @@ router.get('/verify/:verifyToken', ctrl.verifyEmail);
 router.get('/resend', auth, ctrl.resendVerifyEmail);
 router.post('/change-info', auth, ctrl.changeUserInfo);
 router.post('/change-password', auth, ctrl.changePassword);
+router.post('/change-delivery', auth, ctrl.changeUserDeliveryInfo);
+
 
 
 module.exports = router;
