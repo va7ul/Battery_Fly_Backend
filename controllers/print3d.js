@@ -21,11 +21,11 @@ const add3dPrintOrder = async (req, res) => {
     console.log("add3dPrintOrder")
     
     const { path } = req.file;
-    const { email } = req.body;
+    
 
     const orderEmail = {
     from: MAIL_USER,
-    to: email,
+    to: MAIL_USER,
     subject: 'New 3dPrint Order',
     html: `<p>Прийшло нове замовлення на 3д Друк: </p></br>`,
     attachments: [{path}]   
