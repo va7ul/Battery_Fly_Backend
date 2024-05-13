@@ -4,6 +4,9 @@ const jwt = require('jsonwebtoken');
 const { SECRET_KEY } = process.env;
 const { HttpError, ctrlWrapper } = require('../helpers');
 const { Admin } = require('../models/admin');
+const { CodeOfGoods } = require('../models/codeOdGoods');
+const { Product } = require('../models/product');
+const { ProductZbirky } = require('../models/products_zbirky');
 
 
 
@@ -30,8 +33,65 @@ const login = async (req, res) => {
   });
 };
 
+const addProduct = async (req, res) => {
+    console.log("addProduct")
+    
+    const {token} = req.user;
+  
+    const admin = await Admin.findOne({ token })
+    
+    if (!admin) {
+        throw HttpError(404, 'Not Found');
+    }
+
+    const code = await CodeOfGoods.findOne({})
+
+    const codeOfGood= code.codeCounter += 1;
+
+    const result = await code.save();
+    if (!result) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+
+    const addResult = await Product.create({ ...req.body, codeOfGood })
+    if (!addResult) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+    res.status(200).json({addResult})
+};
+
+const addProductZbirky = async (req, res) => {
+    console.log("addProductZbirky")
+   
+    const {token} = req.user;
+
+    const admin = await Admin.findOne({ token })
+    
+    if (!admin) {
+        throw HttpError(404, 'Not Found');
+    }
+
+    const code = await CodeOfGoods.findOne({})
+   
+    const codeOfGood= code.codeCounter += 1;
+
+    const result = await code.save();
+    if (!result) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+
+    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood })
+    if (!addResult) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+    res.status(200).json({addResult})
+};
+
 module.exports = {
 
-  login: ctrlWrapper(login),
+    login: ctrlWrapper(login),
+    addProduct: ctrlWrapper(addProduct),
+    addProductZbirky: ctrlWrapper(addProductZbirky),
+    
 
 };
