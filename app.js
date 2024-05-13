@@ -10,7 +10,7 @@ const orderRouter = require('./routes/api/order')
 const print3dRouter = require('./routes/api/print3d')
 const feedBackRouter = require('./routes/api/feedBack')
 const heroRouter = require('./routes/api/hero')
-
+const adminRouter = require('./routes/api/admin')
 const app = express();
 
 app.use(cors());
@@ -24,6 +24,8 @@ app.use('/api/order', orderRouter)
 app.use('/api/3dprint', print3dRouter)
 app.use('/api/feedback', feedBackRouter)
 app.use('/api/hero', heroRouter)
+app.use('/api/adm', adminRouter)
+
 
 
 

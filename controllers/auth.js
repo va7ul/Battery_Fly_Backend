@@ -1,9 +1,6 @@
 const bcrypt = require('bcrypt');
 const generator = require('generate-password');
 const jwt = require('jsonwebtoken');
-const path = require('node:path');
-const fs = require('node:fs/promises');
-const Jimp = require('jimp');
 const crypto = require('node:crypto');
 const { User } = require('../models/user');
 const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
