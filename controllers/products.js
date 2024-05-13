@@ -20,40 +20,6 @@ const getAllProducts = async (req, res) => {
     });
 }
 
-// const addProduct = async (req, res) => {
-//     const code = await CodeOfGoods.findOne({})
-//     console.log(code.codeCounter)
-//     const codeOfGood= code.codeCounter += 1;
-
-//     const result = await code.save();
-//     if (!result) {
-//         throw HttpError(500, 'Internal server eror, write code in DB');
-//     }
-
-//     const addResult = await Product.create({ ...req.body, codeOfGood })
-//     if (!addResult) {
-//         throw HttpError(500, 'Internal server eror, write code in DB');
-//     }
-//     res.status(200).json({addResult})
-// };
-
-// const addProductZbirky = async (req, res) => {
-//     const code = await CodeOfGoods.findOne({})
-//     console.log(code.codeCounter)
-//     const codeOfGood= code.codeCounter += 1;
-
-//     const result = await code.save();
-//     if (!result) {
-//         throw HttpError(500, 'Internal server eror, write code in DB');
-//     }
-
-//     const addResult = await ProductZbirky.create({ ...req.body, codeOfGood })
-//     if (!addResult) {
-//         throw HttpError(500, 'Internal server eror, write code in DB');
-//     }
-//     res.status(200).json({addResult})
-// };
-
 const getAllBatterys = async (req, res) => {
     console.log("All Batterys")
     const result = await Product.find({ category: "battery" })
@@ -243,8 +209,6 @@ const getBatterysLidepo4 = async (req, res) => {
 
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
-    // addProduct: ctrlWrapper(addProduct),
-    // addProductZbirky: ctrlWrapper(addProductZbirky),
     getAllBatterys: ctrlWrapper(getAllBatterys),
     getSales: ctrlWrapper(getSales),
     getBatterys21700: ctrlWrapper(getBatterys21700),

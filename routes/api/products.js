@@ -6,8 +6,6 @@ const ctrl = require('../../controllers/products')
 const router = express.Router();
 
 router.get('/', ctrl.getAllProducts);
-// router.post('/', ctrl.addProduct);
-// router.post('/assemblies', ctrl.addProductZbirky);
 router.get('/batteries', ctrl.getAllBatterys);
 router.get('/assemblies', ctrl.getAssemblies);
 router.get('/sale', ctrl.getSales);

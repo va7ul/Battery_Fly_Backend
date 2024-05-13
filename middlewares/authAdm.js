@@ -1,10 +1,9 @@
 const jwt = require('jsonwebtoken');
 const { HttpError } = require('../helpers');
-const { User } = require('../models/user');
 const { Admin } = require('../models/admin');
 const { SECRET_KEY } = process.env;
 
-const auth = async (req, res, next) => {
+const authAdm = async (req, res, next) => {
   const { authorization = '' } = req.headers;
   const [bearer, token] = authorization.split(' ');
 
@@ -13,10 +12,10 @@ const auth = async (req, res, next) => {
   }
 
   try {
-    // jwt.verify повертає Payload
+   
     const { id } = jwt.verify(token, SECRET_KEY);
-    console.log(id)
-    const user = await User.findById(id);
+    
+    const user = await Admin.findById(id);
 
     if (!user || !user.token || user.token !== token) {
       next(HttpError(401, 'Not authorized'));
@@ -30,4 +29,4 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = auth;
+module.exports = authAdm;
