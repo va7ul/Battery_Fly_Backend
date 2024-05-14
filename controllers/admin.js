@@ -33,6 +33,13 @@ const login = async (req, res) => {
   });
 };
 
+const logout = async (req, res) => {
+  const { _id } = req.user;
+  await Admin.findByIdAndUpdate(_id, { token: '' });
+
+  res.status(204).end();
+};
+
 const addProduct = async (req, res) => {
     console.log("addProduct")
     
@@ -90,6 +97,7 @@ const addProductZbirky = async (req, res) => {
 module.exports = {
 
     login: ctrlWrapper(login),
+    logout: ctrlWrapper(logout),
     addProduct: ctrlWrapper(addProduct),
     addProductZbirky: ctrlWrapper(addProductZbirky),
     
