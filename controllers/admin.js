@@ -40,6 +40,19 @@ const logout = async (req, res) => {
   res.status(204).end();
 };
 
+const getCurrent = async (req, res) => {
+  const {
+    login,
+    token,
+  } = req.user;
+
+  res.status(200).json({
+      login,
+      token,
+  });
+};
+
+
 const addProduct = async (req, res) => {
     console.log("addProduct")
     
@@ -98,6 +111,7 @@ module.exports = {
 
     login: ctrlWrapper(login),
     logout: ctrlWrapper(logout),
+    getCurrent: ctrlWrapper(getCurrent),
     addProduct: ctrlWrapper(addProduct),
     addProductZbirky: ctrlWrapper(addProductZbirky),
     
