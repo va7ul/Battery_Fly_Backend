@@ -2,7 +2,7 @@ const Joi = require('joi');
 const { Schema, model } = require('mongoose');
 
 const loginSchema = Joi.object({
-  login: Joi.string().pattern().required(),
+  login: Joi.string().required(),
   password: Joi.string().min(6).required(),
 });
 
