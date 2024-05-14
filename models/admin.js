@@ -1,11 +1,8 @@
 const Joi = require('joi');
 const { Schema, model } = require('mongoose');
 
-const emailRegexp = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/;
-
-
 const loginSchema = Joi.object({
-  login: Joi.string().pattern(emailRegexp).required(),
+  login: Joi.string().pattern().required(),
   password: Joi.string().min(6).required(),
 });
 
