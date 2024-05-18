@@ -1,8 +1,10 @@
 const path = require('path');
 const fs = require('fs').promises;
 const { MAIL_USER } = process.env;
+const {NumberOfOrders} = require('../models/numberOfOrders');
 
-const { Print3d } = require('../models/print3d')
+
+const { Print3d, Print3dOrder } = require('../models/print3d')
 const { HttpError, ctrlWrapper, sendEmail } = require('../helpers');
 
 const get3dPrint = async (req, res) => {
@@ -19,15 +21,46 @@ const get3dPrint = async (req, res) => {
 
 const add3dPrintOrder = async (req, res) => {
     console.log("add3dPrintOrder")
+    const number = await NumberOfOrders.findOne({})
+    const numberOfOrder = number.numberOrder +=1;
+
+    const result = await number.save();
     
+    if (!result) {
+                throw HttpError(500, 'Internal server error, write orderNumber in DB');
+            }
     const { path } = req.file;
     
+    const { userName, tel, text, accuracy, plactic, color } = req.body;
+
+    const finalyOrder = {
+        userName,
+        tel,
+        text,
+        accuracy,
+        plactic,
+        color,
+        numberOfOrder
+    }
+ 
+    const order = Print3dOrder.create({...finalyOrder})
+
+    if (!order) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
 
     const orderEmail = {
     from: MAIL_USER,
     to: MAIL_USER,
     subject: 'New 3dPrint Order',
-    html: `<p>Прийшло нове замовлення на 3д Друк: </p></br>`,
+        html: `<p>Прийшло нове замовлення на 3д Друк:</br>
+    Номер замовлення: ${numberOfOrder}</br>
+    Ім'я: ${userName}</br>
+    Номер телефону: ${tel}</br>
+    Коментар: ${text}</br>
+    Точність: ${accuracy}</br>
+    Колір: ${color}</br>
+     </p></br>`,
     attachments: [{path}]   
   };
 
