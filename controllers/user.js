@@ -77,11 +77,8 @@ const verifyEmail = async (req, res) => {
   user.verifiedEmail = true;
 
   await user.save();
-
-  // res.status(200).json({
-  //   message: "Mail verified successfully"
-  // });
-  response.redirect(301, 'https://va7ul.github.io/Battery_Fly_Frontend/main').end();
+  
+  res.redirect(301, 'https://va7ul.github.io/Battery_Fly_Frontend/main');
 
 };
 
