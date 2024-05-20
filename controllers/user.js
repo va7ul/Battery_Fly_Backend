@@ -78,9 +78,12 @@ const verifyEmail = async (req, res) => {
 
   await user.save();
 
-  res.status(200).json({
-    message: "Mail verified successfully"
-  });
+  // res.status(200).json({
+  //   message: "Mail verified successfully"
+  // });
+  response.writeHead(301, {
+  Location: `https://va7ul.github.io/Battery_Fly_Frontend/main`
+}).end();
 
 };
 
