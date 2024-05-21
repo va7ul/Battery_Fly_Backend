@@ -1,12 +1,15 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+
+
 const { SECRET_KEY } = process.env;
-const { HttpError, ctrlWrapper } = require('../helpers');
+const { HttpError, ctrlWrapper, cloudImageProduct } = require('../helpers');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
 const { ProductZbirky } = require('../models/products_zbirky');
+
 
 
 
@@ -54,30 +57,35 @@ const getCurrent = async (req, res) => {
 
 
 const addProduct = async (req, res) => {
-    console.log("addProduct")
+  console.log("addProduct")
     
-    const {token} = req.user;
+  const { token } = req.user;
   
-    const admin = await Admin.findOne({ token })
+  const admin = await Admin.findOne({ token })
     
-    if (!admin) {
-        throw HttpError(404, 'Not Found');
-    }
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
 
-    const code = await CodeOfGoods.findOne({})
+  const code = await CodeOfGoods.findOne({})
 
-    const codeOfGood= code.codeCounter += 1;
+  const codeOfGood = code.codeCounter += 1;
 
-    const result = await code.save();
-    if (!result) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
-    }
+  const result = await code.save();
+  if (!result) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  
+  const images = await cloudImageProduct(req.files)
 
-    const addResult = await Product.create({ ...req.body, codeOfGood })
-    if (!addResult) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
-    }
-    res.status(200).json({addResult})
+
+  const addResult = await Product.create({ ...req.body, codeOfGood, image: images })
+    
+  
+  if (!addResult) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  res.status(200).json({ addResult })
 };
 
 const addProductZbirky = async (req, res) => {
