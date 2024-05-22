@@ -115,6 +115,10 @@ const addProductZbirky = async (req, res) => {
     res.status(200).json({addResult})
 };
 
+const changeHeaderInfo = async (req, res) => {
+  
+}
+
 module.exports = {
 
     login: ctrlWrapper(login),
