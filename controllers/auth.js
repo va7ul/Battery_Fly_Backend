@@ -49,17 +49,7 @@ const register = async (req, res) => {
   await sendEmail(verifyEmail);
 
   res.status(201).json({
-    user: {
-      firstName: newUser.firstName,
-      lastName: newUser.lastName,
-      patronymic: newUser.patronymic,
-      tel: newUser.tel,
-      email: newUser.email,
-    },
-    orders: newUser.orders,
-    delivery: newUser.delivery,
-    favorites: newUser.favorites,
-    verifiedEmail: newUser.verifiedEmail,
+    message: "Singup successfully"
   });
 };
 

@@ -9,6 +9,7 @@ const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
 const { ProductZbirky } = require('../models/products_zbirky');
+const { Hero } = require('../models/hero');
 
 
 
@@ -116,16 +117,97 @@ const addProductZbirky = async (req, res) => {
 };
 
 const changeHeaderInfo = async (req, res) => {
+
+   const { token } = req.user;
   
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  console.log(req.file)
+  const { text } = req.body;
+  const { id } = req.params;
+  let arr = [];
+  arr.push(req.file)
+
+  const img = await cloudImageProduct(arr)
+
+
+  const hero = await Hero.findByIdAndUpdate({ _id: id }, {text, image: img[0]}, {new: true});
+  
+  if (!hero) {
+    throw HttpError(400, 'Wrong id');
+  }
+
+  await hero.save()
+
+
+
+res.status(200).json({ hero })
+
+}
+
+const addHeaderInfo = async (req, res) => {
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+  const { text } = req.body;
+  let arr = [];
+  arr.push(req.file)
+
+  const img = await cloudImageProduct(arr)
+
+
+  const hero = await Hero.create({ text, image: img[0]});
+  
+  if (!hero) {
+    throw HttpError(500, 'Internal server error');
+  }
+
+  res.status(200).json({ hero })
+};
+
+const deleteHeaderInfo = async (req, res) => {
+  console.log("deleteHeaderInfo")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { id } = req.params;
+
+  const hero = await Hero.findByIdAndDelete({_id: id});
+
+  if (!hero) {
+    throw HttpError(400, 'Wrong id');
+  }
+
+  res.status(200).json({ message: "Delete successful" })
+
 }
 
 module.exports = {
 
-    login: ctrlWrapper(login),
-    logout: ctrlWrapper(logout),
-    getCurrent: ctrlWrapper(getCurrent),
-    addProduct: ctrlWrapper(addProduct),
-    addProductZbirky: ctrlWrapper(addProductZbirky),
+  login: ctrlWrapper(login),
+  logout: ctrlWrapper(logout),
+  getCurrent: ctrlWrapper(getCurrent),
+  addProduct: ctrlWrapper(addProduct),
+  addProductZbirky: ctrlWrapper(addProductZbirky),
+  changeHeaderInfo: ctrlWrapper(changeHeaderInfo),
+  addHeaderInfo: ctrlWrapper(addHeaderInfo),
+  deleteHeaderInfo: ctrlWrapper(deleteHeaderInfo),
+
+
+    
     
 
 };
