@@ -50,6 +50,8 @@ const productSchema = new Schema(
             required: [true, 'Category is required']
         },
         capacity: {
+            type: Object,
+            
             any: {
                 type: Object,
                 description: {
