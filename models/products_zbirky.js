@@ -50,8 +50,7 @@ const productSchema = new Schema(
             required: [true, 'Category is required']
         },
         capacity: {
-            type: Object,
-            ah9: {
+            any: {
                 type: Object,
                 description: {
                     type: String,
@@ -60,79 +59,8 @@ const productSchema = new Schema(
                     type: Number
                 },
                 holder: {
-                    type: Number
-                },
-            },
-            ah12: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
-                },
-            },
-            ah15: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
-                },
-            },
-            ah18: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
-                },
-            },
-            ah21: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
-                },
-            },
-            ah24: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
-                },
-            },
-            ah29: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number
+                    type: Number,
+                    default: 0
                 },
             },
             required: [true, 'capacity is required']

@@ -107,9 +107,11 @@ const addProductZbirky = async (req, res) => {
     const result = await code.save();
     if (!result) {
         throw HttpError(500, 'Internal server eror, write code in DB');
-    }
+  }
+  
+    const images = await cloudImageProduct(req.files)
 
-    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood })
+    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images })
     if (!addResult) {
         throw HttpError(500, 'Internal server eror, write code in DB');
     }
