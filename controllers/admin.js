@@ -108,14 +108,26 @@ const addProductZbirky = async (req, res) => {
     if (!result) {
         throw HttpError(500, 'Internal server eror, write code in DB');
   }
+  const capacity = JSON.parse(req.body.capacity)
+
+  let newCapacity = {};
+
+  for (const cap of capacity) {
+    const key = Object.keys(cap)
+    
+    newCapacity[key[0]] = cap[key[0]]
+  }
   
+
     const images = await cloudImageProduct(req.files)
 
-    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images })
+    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images, capacity: {...newCapacity} })
     if (!addResult) {
         throw HttpError(500, 'Internal server eror, write code in DB');
     }
-    res.status(200).json({addResult})
+  res.status(200).json({addResult})
+
+  
 };
 
 const changeHeaderInfo = async (req, res) => {
