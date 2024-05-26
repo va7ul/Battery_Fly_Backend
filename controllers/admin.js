@@ -10,6 +10,7 @@ const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
 const { ProductZbirky } = require('../models/products_zbirky');
 const { Hero } = require('../models/hero');
+const { Order } = require('../models/order');
 
 
 
@@ -209,6 +210,52 @@ const deleteHeaderInfo = async (req, res) => {
 
 }
 
+const getOrders = async (req, res) => {
+  console.log("getOrders")
+  
+    const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+        const orders = await Order.find({});
+        
+        const result = orders.map(order => {
+        return {
+            numberOfOrder: order.numberOfOrder,
+            date: order.createdAt,
+            together: order.together,
+            status: order.status
+        }
+        })
+        
+        res.status(200).json({
+        result
+      });
+        
+    
+}
+
+const getOrderById = async (req, res) => {
+  console.log("getOrderById")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+    const order = await Order.findOne({numberOfOrder: req.params.id});
+
+    res.status(200).json({
+        result: order
+      });
+}
+
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -219,9 +266,9 @@ module.exports = {
   changeHeaderInfo: ctrlWrapper(changeHeaderInfo),
   addHeaderInfo: ctrlWrapper(addHeaderInfo),
   deleteHeaderInfo: ctrlWrapper(deleteHeaderInfo),
+  getOrders: ctrlWrapper(getOrders),
+  getOrderById: ctrlWrapper(getOrderById),
 
 
-    
-    
 
 };

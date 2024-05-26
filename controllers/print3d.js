@@ -83,6 +83,10 @@ const add3dPrintOrder = async (req, res) => {
         
 };
 
+const get3dPrintOrders = async (req, res) => {
+    
+}
+
 module.exports = {
     get3dPrint: ctrlWrapper(get3dPrint),
     add3dPrintOrder: ctrlWrapper(add3dPrintOrder),

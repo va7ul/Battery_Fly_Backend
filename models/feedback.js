@@ -15,7 +15,10 @@ addFeedBack
 
 const feedBackSchema = new Schema(
     {
-        
+         numberOfOrder: {
+            type: Number,
+            required:[true, 'numberOfOrder is required']
+        },
         name: {
             type: String,
             required: [true, 'Name is required']

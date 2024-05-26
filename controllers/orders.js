@@ -118,14 +118,42 @@ const addOrder = async (req, res) => {
     if (!order) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
-    
+
+    const user = await User.findOne({ email })
+    if (!user) {
+        throw HttpError(500, 'Internal server error, write order in DB');
+    }
+    console.log(user)
+    user.orders.push(numberOfOrder)
+    await user.save();
+
     res.status(200).json({
         orderNum: numberOfOrder
       });
 }
 
 const getOrders = async (req, res) => {
-    console.log(req.user.email)
+    console.log("getOrders")
+
+    if (req.admin) {
+        const orders = await Order.find({});
+        
+        const result = orders.map(order => {
+        return {
+            numberOfOrder: order.numberOfOrder,
+            date: order.createdAt,
+            together: order.together,
+            status: order.status
+        }
+        })
+        
+        res.status(200).json({
+        result
+      });
+        
+    }
+
+
     const orders = await Order.find({email: req.user.email});
 
     console.log(orders)
