@@ -21,6 +21,7 @@ router.get('/quick-orders', authAdm, ctrl.getQuickOrders);
 router.get('/quick-order/:id', authAdm, ctrl.getQuickOrderById);
 router.get('/get-users', authAdm, ctrl.getUsers);
 router.get('/get-user/:id', authAdm, ctrl.getUserById);
+router.get('/promo-get', authAdm, ctrl.getPromocode);
 router.post('/promo-add', authAdm, ctrl.addPromocode);
 router.post('/promo-update/:id', authAdm, ctrl.updatePromocode);
 router.delete('/promo-delete/:id', authAdm, ctrl.deletePromocode);

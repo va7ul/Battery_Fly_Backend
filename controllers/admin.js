@@ -387,6 +387,29 @@ const getUserById = async (req, res) => {
   });
 }
 
+const getPromocode = async (req, res) => {
+  console.log("getPromocode")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const promo = await PromoCode.find({  })
+  
+
+  if (!promo) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({
+    promo
+  });
+}
+
 const addPromocode = async (req, res) => {
   console.log("addPromocode")
 
@@ -485,6 +508,7 @@ module.exports = {
   getUsers: ctrlWrapper(getUsers),
   getUserById: ctrlWrapper(getUserById),
   addPromocode: ctrlWrapper(addPromocode),
+  getPromocode: ctrlWrapper(getPromocode),
   updatePromocode: ctrlWrapper(updatePromocode),
   deletePromocode: ctrlWrapper(deletePromocode),
 
