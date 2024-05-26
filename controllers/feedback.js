@@ -22,7 +22,7 @@ const addFeedBack = async (req, res) => {
         name,
         tel,
         comment: text,
-        numberOfOrder
+        numberOfApplication: numberOfOrder
     };
     const feedBack = await FeedBack.create({ ...finalyFeedBack })
         
