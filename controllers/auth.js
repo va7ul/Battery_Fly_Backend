@@ -24,7 +24,7 @@ const register = async (req, res) => {
     verificationToken,
     favorites: [],
     delivery: {},
-    orders: {},
+    orders: [],
   });
 
   if (!newUser) {

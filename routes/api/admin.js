@@ -13,6 +13,9 @@ router.post('/assemblies-add', authAdm,upload.array('files', 12),  ctrl.addProdu
 router.put('/hero/:id', authAdm, upload.single('image'), ctrl.changeHeaderInfo);
 router.post('/hero/', authAdm, upload.single('image'), ctrl.addHeaderInfo);
 router.delete('/hero/:id', authAdm, ctrl.deleteHeaderInfo);
+router.get('/get-orders', authAdm, ctrl.getOrders);
+router.get('/get-order/:id', authAdm, ctrl.getOrderById);
+
 
 
 

@@ -85,6 +85,10 @@ const userSchema = new Schema(
     },
     promoCodes: {
       type: Array
+    },
+    orders: {
+      type: Array,
+      default: []
     }
   },
   { versionKey: false, timestamps: true }
