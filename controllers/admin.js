@@ -11,7 +11,10 @@ const { Product } = require('../models/product');
 const { ProductZbirky } = require('../models/products_zbirky');
 const { Hero } = require('../models/hero');
 const { Order } = require('../models/order');
-
+const { Print3dOrder } = require('../models/print3d');
+const { QuickOrder } = require('../models/quickOrder');
+const { User } = require('../models/user');
+const { PromoCode } = require('../models/promoCode');
 
 
 
@@ -256,6 +259,213 @@ const getOrderById = async (req, res) => {
       });
 }
 
+const get3dPrintOrders = async (req, res) => {
+  console.log("get3dPrintOrders")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+  const orders = await Print3dOrder.find({});
+
+  res.status(200).json({
+    result: orders
+  });
+};
+
+const get3dPrintOrderById = async (req, res) => {
+  console.log("get3dPrintOrderById")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+  const order = await Print3dOrder.findOne({ numberOfOrder: req.params.id });
+
+  res.status(200).json({
+    result: order
+  });
+};
+
+const getQuickOrders = async (req, res) => {
+  console.log("getQuickOrders")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+    const orders = await QuickOrder.find({});
+
+    res.status(200).json({
+        result: orders
+      });
+}
+
+const getQuickOrderById = async (req, res) => {
+  console.log("getQuickOrderById")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+  const order = await QuickOrder.findOne({ numberOfOrder: req.params.id });
+
+  res.status(200).json({
+    result: order
+  });
+};
+
+const getUsers = async (req, res) => {
+  console.log("getUsers")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+  const users = await User.find({}, {"password": 0,"verificationToken": 0, "token": 0});
+
+  // _id: user._id,
+  //   firstName: user.firstName,
+  //   lastName: user.lastName,
+  //   patronymic: user.patronymic,
+  //   tel: user.tel,
+  //   email: user.email,
+  //   orders: user.orders,
+  //   delivery: user.delivery,
+  //   verifiedEmail: user.verifiedEmail,
+  //   favorites: user.favorites,
+  //   promoCodes: user.promoCodes
+  
+  res.status(200).json({
+    users
+  });
+}
+
+const getUserById = async (req, res) => {
+  console.log("getUserById")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const {id} = req.params
+  
+  const user = await User.findOne({_id: id}, {"password": 0,"verificationToken": 0, "token": 0});
+
+  // _id: user._id,
+  //   firstName: user.firstName,
+  //   lastName: user.lastName,
+  //   patronymic: user.patronymic,
+  //   tel: user.tel,
+  //   email: user.email,
+  //   orders: user.orders,
+  //   delivery: user.delivery,
+  //   verifiedEmail: user.verifiedEmail,
+  //   favorites: user.favorites,
+  //   promoCodes: user.promoCodes
+  
+  res.status(200).json({
+    user
+  });
+}
+
+const addPromocode = async (req, res) => {
+  console.log("addPromocode")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { name } = req.body;
+
+  const oldCode = await PromoCode.findOne({ name })
+  
+  if (oldCode) {
+    throw HttpError(409, 'Promocode with the same name already exists');
+  }
+
+  const promo = await PromoCode.create({...req.body});
+
+  if (!promo) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({
+    promo
+  });
+}
+
+const updatePromocode = async (req, res) => {
+  console.log("updatePromocode")
+
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { id } = req.params;
+
+  const promo = await PromoCode.findByIdAndUpdate({ _id: id }, { ...req.body }, { new: true });
+
+  if (!promo) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({
+    promo
+  });
+};
+
+const deletePromocode = async (req, res) => {
+  console.log("deletePromocode")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { id } = req.params;
+
+  const promo = await PromoCode.findByIdAndDelete({_id: id});
+
+  if (!promo) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({ message: "Delete successful" })
+
+}
+
+
+
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -268,6 +478,24 @@ module.exports = {
   deleteHeaderInfo: ctrlWrapper(deleteHeaderInfo),
   getOrders: ctrlWrapper(getOrders),
   getOrderById: ctrlWrapper(getOrderById),
+  get3dPrintOrders: ctrlWrapper(get3dPrintOrders),
+  get3dPrintOrderById: ctrlWrapper(get3dPrintOrderById),
+  getQuickOrders: ctrlWrapper(getQuickOrders),
+  getQuickOrderById: ctrlWrapper(getQuickOrderById),
+  getUsers: ctrlWrapper(getUsers),
+  getUserById: ctrlWrapper(getUserById),
+  addPromocode: ctrlWrapper(addPromocode),
+  updatePromocode: ctrlWrapper(updatePromocode),
+  deletePromocode: ctrlWrapper(deletePromocode),
+
+
+
+
+
+
+
+
+
 
 
 

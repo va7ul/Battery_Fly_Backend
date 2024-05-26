@@ -15,6 +15,23 @@ router.post('/hero/', authAdm, upload.single('image'), ctrl.addHeaderInfo);
 router.delete('/hero/:id', authAdm, ctrl.deleteHeaderInfo);
 router.get('/get-orders', authAdm, ctrl.getOrders);
 router.get('/get-order/:id', authAdm, ctrl.getOrderById);
+router.get('/get-3dprint-orders', authAdm, ctrl.get3dPrintOrders);
+router.get('/get-3dprint-orders/:id', authAdm, ctrl.get3dPrintOrderById);
+router.get('/quick-orders', authAdm, ctrl.getQuickOrders);
+router.get('/quick-order/:id', authAdm, ctrl.getQuickOrderById);
+router.get('/get-users', authAdm, ctrl.getUsers);
+router.get('/get-user/:id', authAdm, ctrl.getUserById);
+router.post('/promo-add', authAdm, ctrl.addPromocode);
+router.post('/promo-update/:id', authAdm, ctrl.updatePromocode);
+router.delete('/promo-delete/:id', authAdm, ctrl.deletePromocode);
+
+
+
+
+
+
+
+
 
 
 
