@@ -17,8 +17,18 @@ const cloudImageProduct = async (files) => {
      let images =[];
   
   for (let i = 0; i < files.length; i++){
-      const names = files[i].filename.split(".")
-      const path = files[i].path;
+    let names = "";
+    let path = "";
+    if (files[i].filename) {
+      names = files[i].filename.split(".")
+      path = files[i].path;
+    }
+
+    if (files[i].name) {
+      names = files[i].name.split(".")
+      path = files[i].path;
+    }
+      
     
     const res = await cloudinary.uploader.upload(path,
         {
