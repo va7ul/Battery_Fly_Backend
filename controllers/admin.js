@@ -93,6 +93,37 @@ const addProduct = async (req, res) => {
   res.status(200).json({ addResult })
 };
 
+const editProduct = async (req, res) => {
+  console.log("editProduct")
+    
+  const { token } = req.user;
+  const { id } = req.params;
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  if (req.files.length > 0) {
+
+    const images = await cloudImageProduct(req.files)
+
+    const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body, image: images }, { new: true })
+    
+    if (!editResult) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  res.status(200).json({ editResult })
+  }
+
+  const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body}, { new: true })
+  
+  if (!editResult) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  res.status(200).json({ editResult })
+};
+
 const addProductZbirky = async (req, res) => {
     console.log("addProductZbirky")
    
@@ -511,6 +542,8 @@ module.exports = {
   getPromocode: ctrlWrapper(getPromocode),
   updatePromocode: ctrlWrapper(updatePromocode),
   deletePromocode: ctrlWrapper(deletePromocode),
+  editProduct: ctrlWrapper(editProduct),
+
 
 
 
