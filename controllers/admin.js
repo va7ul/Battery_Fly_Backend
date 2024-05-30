@@ -385,7 +385,7 @@ const getUsers = async (req, res) => {
   const users = await User.find(
     {},
     { password: 0, verificationToken: 0, token: 0 }
-  ).sort({ createdAt: 1 });
+  ).sort({ createdAt: -1 });
 
   // _id: user._id,
   //   firstName: user.firstName,
