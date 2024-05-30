@@ -446,7 +446,7 @@ const getPromocode = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const promo = await PromoCode.find({}).sort({ createdAt: 1 });
+  const promo = await PromoCode.find({}).sort({ createdAt: -1 });
   
 
   if (!promo) {
