@@ -145,7 +145,7 @@ const addProductZbirky = async (req, res) => {
   }
   const capacity = JSON.parse(req.body.capacity)
 
-  let newCapacity = {};
+  const newCapacity = {};
 
   for (const cap of capacity) {
     const key = Object.keys(cap)
@@ -177,7 +177,7 @@ const changeHeaderInfo = async (req, res) => {
   console.log(req.file)
   const { text } = req.body;
   const { id } = req.params;
-  let arr = [];
+  const arr = [];
   arr.push(req.file)
 
   const img = await cloudImageProduct(arr)
@@ -207,7 +207,7 @@ const addHeaderInfo = async (req, res) => {
   }
   
   const { text } = req.body;
-  let arr = [];
+  const arr = [];
   arr.push(req.file)
 
   const img = await cloudImageProduct(arr)
@@ -259,11 +259,25 @@ const getOrders = async (req, res) => {
         
         const result = orders.map(order => {
         return {
-            numberOfOrder: order.numberOfOrder,
-            date: order.createdAt,
-            together: order.together,
-            status: order.status
-        }
+          numberOfOrder: order.numberOfOrder,
+          firstName: order.firstName,
+          lastName: order.lastName,
+          email: order.email,
+          comment: order.comment,
+          tel: order.tel,
+          total: order.total,
+          promoCode: order.promoCode,
+          promoCodeDiscount: order.promoCodeDiscount,
+          discountValue: order.discountValue,
+          together: order.together,
+          cartItems: order.cartItems,
+          deliveryType: order.deliveryType,
+          city: order.city,
+          warehouse: order.warehouse,
+          payment: order.payment,
+          date: order.createdAt,
+          status: order.status,
+        };
         })
         
         res.status(200).json({
