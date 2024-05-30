@@ -271,11 +271,11 @@ const getOrders = async (req, res) => {
           discountValue: order.discountValue,
           together: order.together,
           cartItems: order.cartItems,
-          deliveryType: order.deliveryType,
+          delivery: order.deliveryType,
           city: order.city,
           warehouse: order.warehouse,
           payment: order.payment,
-          date: order.createdAt,
+          createdAt: order.createdAt,
           status: order.status,
         };
         })
