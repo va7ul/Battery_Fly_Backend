@@ -255,7 +255,7 @@ const getOrders = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-        const orders = await Order.find({});
+        const orders = await Order.find({}).sort({numberOfOrder:-1});
         
         const result = orders.map(order => {
         return {
