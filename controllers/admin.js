@@ -514,7 +514,7 @@ const deletePromocode = async (req, res) => {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
 
-  res.status(200).json({ message: "Delete successful" })
+  res.status(200).json({ id, message: "Delete successful" })
 
 }
 
