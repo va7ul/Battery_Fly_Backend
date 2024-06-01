@@ -190,7 +190,9 @@ const getOrderById = async (req, res) => {
 
 const getPromoCode = async (req, res) => {
 
-    const promoCode = await PromoCode.findOne({ name: req.params.name });
+    const promoCode = await PromoCode.findOne({ name: req.params.name }).sort({
+      numberOfOrder: -1,
+    });
     
     const user = req.user;
 
