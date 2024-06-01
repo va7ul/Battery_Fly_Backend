@@ -154,7 +154,9 @@ const getOrders = async (req, res) => {
     }
 
 
-    const orders = await Order.find({email: req.user.email});
+    const orders = await Order.find({ email: req.user.email }).sort({
+      numberOfOrder: -1,
+    });
 
     console.log(orders)
 
@@ -190,9 +192,7 @@ const getOrderById = async (req, res) => {
 
 const getPromoCode = async (req, res) => {
 
-    const promoCode = await PromoCode.findOne({ name: req.params.name }).sort({
-      numberOfOrder: -1,
-    });
+    const promoCode = await PromoCode.findOne({ name: req.params.name });
     
     const user = req.user;
 
