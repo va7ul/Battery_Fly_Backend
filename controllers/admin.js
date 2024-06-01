@@ -15,6 +15,7 @@ const { Print3dOrder } = require('../models/print3d');
 const { QuickOrder } = require('../models/quickOrder');
 const { User } = require('../models/user');
 const { PromoCode } = require('../models/promoCode');
+const {FeedBack} = require('../models/feedback')
 
 
 
@@ -163,6 +164,49 @@ const addProductZbirky = async (req, res) => {
   res.status(200).json({addResult})
 
   
+};
+
+const editProductZbirky = async (req, res) => {
+  console.log("editProductZbirky")
+    
+  const { token } = req.user;
+  const { id } = req.params;
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  let newCapacity = {};
+
+  for (const cap of capacity) {
+    const key = Object.keys(cap)
+    
+    newCapacity[key[0]] = cap[key[0]]
+  }
+
+  if (req.files.length > 0) {
+
+    const images = await cloudImageProduct(req.files)
+
+     const capacity = JSON.parse(req.body.capacity)
+
+  
+
+    const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}, image: images }, { new: true })
+    
+    if (!editResult) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  res.status(200).json({ editResult })
+  }
+
+  const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}}, { new: true })
+  
+  if (!editResult) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+  res.status(200).json({ editResult })
 };
 
 const changeHeaderInfo = async (req, res) => {
@@ -535,6 +579,77 @@ const deletePromocode = async (req, res) => {
 
 }
 
+const deleteProduct = async (req, res) => {
+  console.log("deleteProduct")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { id } = req.params;
+
+  const product = await Product.findOneAndDelete({codeOfGood: id});
+
+  if (!product) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({ id, message: "Delete successful" })
+
+}
+
+const deleteZbirka = async (req, res) => {
+  console.log("deleteProduct")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { id } = req.params;
+
+  const product = await ProductZbirky.findOneAndDelete({codeOfGood: id});
+
+  if (!product) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({ id, message: "Delete successful" })
+
+}
+
+const getFeedback = async (req, res) => {
+  console.log("getFeedback")
+
+   const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const feedback = await FeedBack.find({})
+  
+
+  if (!feedback) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+
+  res.status(200).json({
+    feedback
+  });
+}
+
+
+
 
 
 module.exports = {
@@ -560,6 +675,14 @@ module.exports = {
   updatePromocode: ctrlWrapper(updatePromocode),
   deletePromocode: ctrlWrapper(deletePromocode),
   editProduct: ctrlWrapper(editProduct),
+  editProductZbirky: ctrlWrapper(editProductZbirky),
+  deleteProduct: ctrlWrapper(deleteProduct),
+  deleteZbirka: ctrlWrapper(deleteZbirka),
+  getFeedback: ctrlWrapper(getFeedback),
+
+
+
+
 
 
 
