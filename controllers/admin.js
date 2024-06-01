@@ -638,13 +638,24 @@ const getFeedback = async (req, res) => {
 
   const feedback = await FeedBack.find({})
   
+  const result = feedback.map(i => {
+    return {
+      _id: i._id,
+      numberOfApplication: i.numberOfOrder,
+      name: i.name,
+      tel: i.tel,
+      comment: i.comment,
+      createdAt: i.createdAt,
+      updatedAt: i.updatedAt
+    }
+  })
 
   if (!feedback) {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
 
   res.status(200).json({
-    feedback
+         result  
   });
 }
 
