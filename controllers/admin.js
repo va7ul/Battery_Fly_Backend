@@ -146,7 +146,7 @@ const addProductZbirky = async (req, res) => {
   }
   const capacity = JSON.parse(req.body.capacity)
 
-  let newCapacity = {};
+  const newCapacity = {};
 
   for (const cap of capacity) {
     const key = Object.keys(cap)
@@ -221,7 +221,7 @@ const changeHeaderInfo = async (req, res) => {
   console.log(req.file)
   const { text } = req.body;
   const { id } = req.params;
-  let arr = [];
+  const arr = [];
   arr.push(req.file)
 
   const img = await cloudImageProduct(arr)
@@ -251,7 +251,7 @@ const addHeaderInfo = async (req, res) => {
   }
   
   const { text } = req.body;
-  let arr = [];
+  const arr = [];
   arr.push(req.file)
 
   const img = await cloudImageProduct(arr)
@@ -299,15 +299,29 @@ const getOrders = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-        const orders = await Order.find({});
+        const orders = await Order.find({}).sort({ numberOfOrder: -1 });
         
         const result = orders.map(order => {
         return {
-            numberOfOrder: order.numberOfOrder,
-            date: order.createdAt,
-            together: order.together,
-            status: order.status
-        }
+          numberOfOrder: order.numberOfOrder,
+          firstName: order.firstName,
+          lastName: order.lastName,
+          email: order.email,
+          comment: order.comment,
+          tel: order.tel,
+          total: order.total,
+          promoCode: order.promoCode,
+          promoCodeDiscount: order.promoCodeDiscount,
+          discountValue: order.discountValue,
+          together: order.together,
+          cartItems: order.cartItems,
+          delivery: order.deliveryType,
+          city: order.city,
+          warehouse: order.warehouse,
+          payment: order.payment,
+          createdAt: order.createdAt,
+          status: order.status,
+        };
         })
         
         res.status(200).json({
@@ -344,7 +358,7 @@ const get3dPrintOrders = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
   
-  const orders = await Print3dOrder.find({});
+  const orders = await Print3dOrder.find({}).sort({ numberOfOrder: -1 });
 
   res.status(200).json({
     result: orders
@@ -378,7 +392,7 @@ const getQuickOrders = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
   
-    const orders = await QuickOrder.find({});
+    const orders = await QuickOrder.find({}).sort({ numberOfOrder: -1 });
 
     res.status(200).json({
         result: orders
@@ -412,7 +426,10 @@ const getUsers = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
   
-  const users = await User.find({}, {"password": 0,"verificationToken": 0, "token": 0});
+  const users = await User.find(
+    {},
+    { password: 0, verificationToken: 0, token: 0 }
+  ).sort({ createdAt: -1 });
 
   // _id: user._id,
   //   firstName: user.firstName,
@@ -473,7 +490,7 @@ const getPromocode = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const promo = await PromoCode.find({  })
+  const promo = await PromoCode.find({}).sort({ createdAt: -1 });
   
 
   if (!promo) {

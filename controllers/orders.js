@@ -136,7 +136,7 @@ const getOrders = async (req, res) => {
     console.log("getOrders")
 
     if (req.admin) {
-        const orders = await Order.find({});
+        const orders = await Order.find({}).sort({numberOfOrder:-1});
         
         const result = orders.map(order => {
         return {
