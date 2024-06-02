@@ -177,6 +177,8 @@ const editProductZbirky = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
+  const capacity = JSON.parse(req.body.capacity)
+  
   let newCapacity = {};
 
   for (const cap of capacity) {
