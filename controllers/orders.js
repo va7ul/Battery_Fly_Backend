@@ -213,7 +213,7 @@ const getPromoCode = async (req, res) => {
 
     if (!promoCode.valid) {
         throw HttpError(409, 'promoCode not valid');
-        
+    }
 }
 
 const addQuickOrder = async (req, res) => {
