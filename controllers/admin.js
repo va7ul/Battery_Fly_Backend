@@ -286,7 +286,7 @@ const deleteHeaderInfo = async (req, res) => {
     throw HttpError(400, 'Wrong id');
   }
 
-  res.status(200).json({ message: "Delete successful" })
+  res.status(200).json({ id , message: "Delete successful" })
 
 }
 
