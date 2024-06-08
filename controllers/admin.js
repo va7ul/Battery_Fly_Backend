@@ -671,7 +671,25 @@ const updateOrderById = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
   
-    const order = await Order.findOneAndUpdate({_id: req.params.id}, {...req.body});
+  const { status, cartItems } = req.body;
+
+  if (status === "В роботі") {
+    console.log("В роботі")
+    for (const item of cartItems) {
+      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
+      console.log('product', product?.quantity)
+      if (!product) {
+        const zbirka = await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
+        console.log("zbirka", zbirka?.quantity)
+      }
+    }
+  }
+
+  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body });
+  
+  if (!order) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+  }
 
     res.status(200).json({
         result: order
