@@ -661,6 +661,23 @@ const getFeedback = async (req, res) => {
   });
 }
 
+const updateOrderById = async (req, res) => {
+  console.log("updateOrderById")
+  const { token } = req.user;
+  
+  const admin = await Admin.findOne({ token })
+    
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+  
+    const order = await Order.findOneAndUpdate({_id: req.params.id}, {...req.body});
+
+    res.status(200).json({
+        result: order
+      });
+}
+
 
 
 
@@ -692,6 +709,8 @@ module.exports = {
   deleteProduct: ctrlWrapper(deleteProduct),
   deleteZbirka: ctrlWrapper(deleteZbirka),
   getFeedback: ctrlWrapper(getFeedback),
+  updateOrderById: ctrlWrapper(updateOrderById),
+
 
 
 

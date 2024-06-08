@@ -30,6 +30,8 @@ router.post('/promo-code', authAdm, ctrl.addPromocode);
 router.post('/promo-code/:id', authAdm, ctrl.updatePromocode);
 router.delete('/promo-code/:id', authAdm, ctrl.deletePromocode);
 router.get('/feedback', authAdm, ctrl.getFeedback);
+router.get('/put-order/:id', authAdm, ctrl.updateOrderById);
+
 
 
 
