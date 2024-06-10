@@ -27,7 +27,7 @@ router.get('/users', authAdm, ctrl.getUsers);
 router.get('/user/:id', authAdm, ctrl.getUserById);
 router.get('/promo-codes', authAdm, ctrl.getPromocode);
 router.post('/promo-code', authAdm, ctrl.addPromocode);
-router.post('/promo-code/:id', authAdm, ctrl.updatePromocode);
+router.put('/promo-code/:id', authAdm, ctrl.updatePromocode);
 router.delete('/promo-code/:id', authAdm, ctrl.deletePromocode);
 router.get('/feedback', authAdm, ctrl.getFeedback);
 router.put('/put-order/:id', authAdm, ctrl.updateOrderById);

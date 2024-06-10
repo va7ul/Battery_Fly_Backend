@@ -223,6 +223,19 @@ const changeHeaderInfo = async (req, res) => {
   console.log(req.file)
   const { text } = req.body;
   const { id } = req.params;
+
+  if (req.files.length === 0) {
+    const hero = await Hero.findByIdAndUpdate({ _id: id }, { text }, { new: true });
+    
+    if (!hero) {
+    throw HttpError(400, 'Wrong id');
+  }
+
+    await hero.save()
+    
+    res.status(200).json({ hero })
+    
+  };
   const arr = [];
   arr.push(req.file)
 
