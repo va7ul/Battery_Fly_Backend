@@ -57,17 +57,18 @@ const login = async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
 
-  if (!user.verifiedEmail) {
-    throw HttpError(401, 'Email not verified');
-  }
   if (!user) {
     throw HttpError(401, 'Email or password is wrong');
-  }
-
+    }
+    
   const passwordCompare = await bcrypt.compare(password, user.password);
   if (!passwordCompare) {
     throw HttpError(401, 'Email or password is wrong');
   }
+
+  if (!user.verifiedEmail) {
+      throw HttpError(401, 'Email not verified');
+    }
 
   const payload = { id: user._id };
   const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1y' });
