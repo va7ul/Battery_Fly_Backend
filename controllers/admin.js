@@ -700,6 +700,7 @@ const updateOrderById = async (req, res) => {
     to: email,
     subject: 'Ваше замовлення прийняте в роботу',
       html: `<p>Ваше замовлення ${order.numberOfOrder}</p>`,
+      text: `<p>Ваше замовлення ${order.numberOfOrder}</p>`
   };
 
   await sendEmail(textEmail);
