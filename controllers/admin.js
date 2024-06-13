@@ -690,12 +690,27 @@ const updateOrderById = async (req, res) => {
     console.log("В роботі")
     for (const item of cartItems) {
       const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
-      console.log('product', product?.quantity)
+      
       if (!product) {
-        const zbirka = await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
-        console.log("zbirka", zbirka?.quantity)
+          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
+  }
+
+  if (status === "Скасовано") {
+    console.log("Скасовано")
+
+    const order = await Order.findOne({ _id: req.params.id });
+    if (order.status === "В роботі") {
+      for (const item of cartItems) {
+      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+      
+      if (!product) {
+         await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+      }
+    }
+    }
+    
   }
 
   const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body });
