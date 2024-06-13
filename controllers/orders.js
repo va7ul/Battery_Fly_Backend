@@ -154,7 +154,9 @@ const getOrders = async (req, res) => {
     }
 
 
-    const orders = await Order.find({email: req.user.email});
+    const orders = await Order.find({ email: req.user.email }).sort({
+      numberOfOrder: -1,
+    });
 
     console.log(orders)
 
