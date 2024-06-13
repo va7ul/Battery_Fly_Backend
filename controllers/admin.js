@@ -651,7 +651,7 @@ const getFeedback = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const feedback = await FeedBack.find({})
+  const feedback = await FeedBack.find({}).sort({ createdAt: -1 })
   
   const result = feedback.map(i => {
     return {
