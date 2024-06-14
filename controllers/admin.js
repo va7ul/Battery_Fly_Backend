@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const fs = require('fs')
+const { promisify } = require('util');
 
 const { MAIL_USER } = process.env;
 const { SECRET_KEY } = process.env;
@@ -698,6 +699,7 @@ const updateOrderById = async (req, res) => {
       }
     }
 
+    const readFileAsync = promisify(fs.readFile);
     const htmlTemplate = await readFileAsync('../helpers/emailTemplate.html', 'utf-8');
     const textEmail = {
     from: MAIL_USER,
