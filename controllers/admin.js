@@ -219,11 +219,11 @@ const changeHeaderInfo = async (req, res) => {
   if (!admin) {
     throw HttpError(404, 'Not Found');
   }
-  console.log(req.file)
+  
   const { text } = req.body;
   const { id } = req.params;
 
-  if (req.files.length === 0) {
+  if (!req.file) {
     const hero = await Hero.findByIdAndUpdate({ _id: id }, { text }, { new: true });
     
     if (!hero) {
