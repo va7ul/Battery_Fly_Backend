@@ -20,6 +20,24 @@ const getAllProducts = async (req, res) => {
     });
 }
 
+const getProductsArray = async (req, res) => {
+    console.log("getProductsArray")
+    const {products} = req.body
+    const prod = await Product.find({codeOfGood: [...products]})
+    const productsZbirky = await ProductZbirky.find({codeOfGood: [...products]})
+    
+    
+    if (!products && !productsZbirky) {
+        throw HttpError(401, 'Bad request');
+    }
+    res.status(200).json({
+      result: [
+        ...prod,
+        ...productsZbirky,
+      ]
+    });
+}
+
 const getAllBatterys = async (req, res) => {
     console.log("All Batterys")
     const result = await Product.find({ category: "battery" })
@@ -222,7 +240,9 @@ module.exports = {
     getMaterials: ctrlWrapper(getMaterials),
     getBatterysLipo: ctrlWrapper(getBatterysLipo),
     getBatterysLidepo4: ctrlWrapper(getBatterysLidepo4),
-    getAssemblies: ctrlWrapper(getAssemblies),
+    getAssemblies: ctrlWrapper(getAssemblies), 
+    getProductsArray: ctrlWrapper(getProductsArray),
+    
 
 
 

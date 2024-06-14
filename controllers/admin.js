@@ -690,21 +690,21 @@ const updateOrderById = async (req, res) => {
     const order = await Order.findOne({ _id: req.params.id });
 
     for (const item of cartItems) {
-      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
-      
+      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: item.quantity - item.quantityOrdered }, { new: true })
+      console.log(product)
       if (!product) {
           await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
-    const textEmail = {
-    from: MAIL_USER,
-    to: email,
-    subject: 'Ваше замовлення прийняте в роботу',
-      html: `<p>Ваше замовлення прийняте в роботу</p>`,
+  //   const textEmail = {
+  //   from: MAIL_USER,
+  //   to: email,
+  //   subject: 'Ваше замовлення прийняте в роботу',
+  //     html: `<p>Ваше замовлення прийняте в роботу</p>`,
       
-  };
+  // };
 
-  await sendEmail(textEmail);
+  // await sendEmail(textEmail);
   }
 
   if (status === "Скасовано") {
