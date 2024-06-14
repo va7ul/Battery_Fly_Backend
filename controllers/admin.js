@@ -696,15 +696,15 @@ const updateOrderById = async (req, res) => {
           await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
-  //   const textEmail = {
-  //   from: MAIL_USER,
-  //   to: email,
-  //   subject: 'Ваше замовлення прийняте в роботу',
-  //     html: `<p>Ваше замовлення прийняте в роботу</p>`,
+    const textEmail = {
+    from: MAIL_USER,
+    to: email,
+    subject: 'Ваше замовлення прийняте в роботу',
+      html: `<p>Ваше замовлення прийняте в роботу</p>`,
       
-  // };
+  };
 
-  // await sendEmail(textEmail);
+  await sendEmail(textEmail);
   }
 
   if (status === "Скасовано") {
