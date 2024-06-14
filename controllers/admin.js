@@ -1,5 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const fs = require('fs')
+
 const { MAIL_USER } = process.env;
 const { SECRET_KEY } = process.env;
 const { HttpError, ctrlWrapper, cloudImageProduct, sendEmail } = require('../helpers');
@@ -695,12 +697,14 @@ const updateOrderById = async (req, res) => {
           await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
+
+    const htmlTemplate = await readFileAsync('../helpers/emailTemplate.html', 'utf-8');
     const textEmail = {
     from: MAIL_USER,
     to: email,
     subject: 'Ваше замовлення прийняте в роботу',
-      html: `<p>Ваше замовлення ${order.numberOfOrder}</p>`,
-      text: `<p>Ваше замовлення ${order.numberOfOrder}</p>`
+      html: htmlTemplate,
+      
   };
 
   await sendEmail(textEmail);
@@ -722,7 +726,7 @@ const updateOrderById = async (req, res) => {
     
   }
 
-  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body });
+  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, {new: true});
   
   if (!order) {
     throw HttpError(500, 'Internal server eror, write code in DB');
