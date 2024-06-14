@@ -1,7 +1,5 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const fs = require('fs')
-const { promisify } = require('util');
 
 const { MAIL_USER } = process.env;
 const { SECRET_KEY } = process.env;
@@ -698,14 +696,11 @@ const updateOrderById = async (req, res) => {
           await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
-
-    const readFileAsync = promisify(fs.readFile);
-    const htmlTemplate = await readFileAsync('../helpers/emailTemplate.html', 'utf-8');
     const textEmail = {
     from: MAIL_USER,
     to: email,
     subject: 'Ваше замовлення прийняте в роботу',
-      html: htmlTemplate,
+      html: `<p>Ваше замовлення прийняте в роботу</p>`,
       
   };
 
