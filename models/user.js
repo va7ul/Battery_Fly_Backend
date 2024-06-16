@@ -26,20 +26,20 @@ const addFavoriteSchema = Joi.object({
 const changeInfoSchema = Joi.object({
   firstName:Joi.string(),
   lastName:Joi.string(),
-  patronymic: Joi.string(),
-  tel: Joi.string()
+  patronymic: Joi.string().allow(""),
+  tel: Joi.string().allow("")
 });
 
 const changePassSchema = Joi.object({
-  newPassword: Joi.string(),
-  password: Joi.string(),
+  newPassword: Joi.string().required(),
+  password: Joi.string().required(),
   
 });
 
 const changeDeliverySchema = Joi.object({
   delivery: Joi.object({
-    city: Joi.string(),
-    warehouse: Joi.string(),
+    city: Joi.string().required(),
+    warehouse: Joi.string().required(),
   }),
   
   
