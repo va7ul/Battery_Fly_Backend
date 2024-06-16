@@ -23,13 +23,37 @@ const addFavoriteSchema = Joi.object({
   favorites: Joi.string()
 })
 
+const changeInfoSchema = Joi.object({
+  firstName:Joi.string(),
+  lastName:Joi.string(),
+  patronymic: Joi.string(),
+  tel: Joi.string()
+});
+
+const changePassSchema = Joi.object({
+  newPassword: Joi.string(),
+  password: Joi.string(),
+  
+});
+
+const changeDeliverySchema = Joi.object({
+  delivery: Joi.object({
+    city: Joi.string(),
+    warehouse: Joi.string(),
+  }),
+  
+  
+});
+
 
 const schemas = {
   registerSchema,
   varifyEmailSchema,
   loginSchema,
   addFavoriteSchema,
-  
+  changeInfoSchema,
+  changePassSchema,
+  changeDeliverySchema
 };
 
 const userSchema = new Schema(
