@@ -583,9 +583,17 @@ const deletePromocode = async (req, res) => {
 
   const { id } = req.params;
 
-  const promo = await PromoCode.findByIdAndDelete({_id: id});
+  const promo = await PromoCode.findOne({ _id: id });
+  
+  const promoInUse = await User.findOne({ promoCodes: promo.name })
+  
+  if (promoInUse) {
+    throw HttpError(500, 'Promocode in use');
+  }
+ 
+  const promoDelete = await PromoCode.findByIdAndDelete({_id: id});
 
-  if (!promo) {
+  if (!promoDelete) {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
 
