@@ -5,8 +5,8 @@ const { HttpError, ctrlWrapper } = require('../helpers');
 
 const getAllProducts = async (req, res) => {
     console.log("All")
-    const products = await Product.find({})
-    const productsZbirky = await ProductZbirky.find({})
+    const products = await Product.find({ popular: 'true' });
+    const productsZbirky = await ProductZbirky.find({ popular: 'true' });
     
     
     if (!products || !productsZbirky) {
