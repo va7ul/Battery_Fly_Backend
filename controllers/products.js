@@ -54,7 +54,7 @@ const getAllBatterys = async (req, res) => {
 
 const getAssemblies = async (req, res) => {
     console.log("getAssemblies")
-    const result = await ProductZbirky.find({ })
+    const result = await ProductZbirky.find({ category: "assembly" });
     
     
     
