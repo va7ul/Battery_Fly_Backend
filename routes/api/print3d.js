@@ -8,7 +8,12 @@ const ctrl = require('../../controllers/print3d');
 const router = express.Router();
 
 router.get('/', ctrl.get3dPrint);
-router.post('/', upload.single('file'), validateBody(schemas.add3dPrintOrder),ctrl.add3dPrintOrder);
+router.post(
+  '/',
+  upload.array('files', 10),
+  validateBody(schemas.add3dPrintOrder),
+  ctrl.add3dPrintOrder
+);
 
 
 module.exports = router;
