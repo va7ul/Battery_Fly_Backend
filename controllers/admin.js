@@ -329,7 +329,7 @@ const getOrders = async (req, res) => {
           discountValue: order.discountValue,
           together: order.together,
           cartItems: order.cartItems,
-          delivery: order.deliveryType,
+          deliveryType: order.deliveryType,
           city: order.city,
           warehouse: order.warehouse,
           payment: order.payment,
