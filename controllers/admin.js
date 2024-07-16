@@ -317,7 +317,7 @@ const getOrders = async (req, res) => {
         
         const result = orders.map(order => {
         return {
-          numberOfOrder: order.numberOfOrder,
+          numberOfOrder: order.numberOfOrdere,
           firstName: order.firstName,
           lastName: order.lastName,
           email: order.email,
