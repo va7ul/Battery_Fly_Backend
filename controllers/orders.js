@@ -1,5 +1,5 @@
-const { ctrlWrapper, HttpError } = require('../helpers');
-const { NOVA_POST } = process.env;
+const { ctrlWrapper, HttpError, sendEmail } = require('../helpers');
+const { NOVA_POST, MAIL_USER } = process.env;
 
 const axios = require('axios');
 const {PromoCode} = require('../models/promoCode')
@@ -126,6 +126,58 @@ const addOrder = async (req, res) => {
     console.log(user)
     user.orders.push(numberOfOrder)
     await user.save();
+
+    const emailText = {
+    from: MAIL_USER,
+    to: email,
+    subject: 'Order',
+    html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <table style="border: 1px solid rgb(160, 152, 152)">
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+        "
+      >
+        <b>Деталі замовлення</b>
+      </caption>
+      <!-- <tr>
+        <td style="border: 1px solid rgb(160, 152, 152)">
+          <b>Деталі замовлення</b>
+        </td>
+      </tr> -->
+      <tr>
+        <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
+          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
+          <p style="margin: 0"><b>Дата замовлення: </b>11.07.2024</p>
+          <p style="margin: 0">
+            <b>Спосіб оплати: </b>Картою по реквізитах фізичних осіб
+          </p>
+          <p style="margin: 0"><b>Спосіб доставки: </b>Самовивіз</p>
+        </td>
+        <td style="align-content: baseline; padding: 5px">
+          <p style="margin: 0"><b>Е-mail: </b>velnaza@gmail.com</p>
+          <p style="margin: 0"><b>Телефон: </b>063-000-00-00</p>
+          <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+    
+    };
+    
+    await sendEmail(emailText);
+
 
     res.status(200).json({
         orderNum: numberOfOrder
