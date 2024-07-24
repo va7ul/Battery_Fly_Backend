@@ -19,10 +19,6 @@ const loginSchema = Joi.object({
   password: Joi.string().min(6).required(),
 });
 
-const addFavoriteSchema = Joi.object({
-  favorites: Joi.string()
-})
-
 const changeInfoSchema = Joi.object({
   firstName:Joi.string(),
   lastName:Joi.string(),
@@ -50,7 +46,6 @@ const schemas = {
   registerSchema,
   varifyEmailSchema,
   loginSchema,
-  addFavoriteSchema,
   changeInfoSchema,
   changePassSchema,
   changeDeliverySchema
