@@ -139,38 +139,157 @@ const addOrder = async (req, res) => {
     <title>Document</title>
   </head>
   <body>
-    <table style="border: 1px solid rgb(160, 152, 152)">
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
       <caption
         style="
           border: 1px solid rgb(160, 152, 152);
           border-bottom: 0;
           text-align: left;
           padding: 2px 7px;
+          background-color: #9a969638;
         "
       >
         <b>Деталі замовлення</b>
       </caption>
-      <!-- <tr>
-        <td style="border: 1px solid rgb(160, 152, 152)">
-          <b>Деталі замовлення</b>
-        </td>
-      </tr> -->
       <tr>
         <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
-          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
+          <p style="margin: 0"><b>Номер замовлення: </b>23</p>
           <p style="margin: 0"><b>Дата замовлення: </b>11.07.2024</p>
           <p style="margin: 0">
             <b>Спосіб оплати: </b>Картою по реквізитах фізичних осіб
           </p>
           <p style="margin: 0"><b>Спосіб доставки: </b>Самовивіз</p>
         </td>
-        <td style="align-content: baseline; padding: 5px">
+        <td style="padding: 5px">
           <p style="margin: 0"><b>Е-mail: </b>velnaza@gmail.com</p>
           <p style="margin: 0"><b>Телефон: </b>063-000-00-00</p>
           <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
         </td>
       </tr>
     </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Реквізити для оплати</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0; padding: 15px 0">
+            <b>Отримувач</b><br />ФОП Занкевич Володимир Михайлович
+          </p>
+          <p style="margin: 0">
+            <b>Рахунок отримувача</b><br />UA253808050000000260072159049
+          </p>
+          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3563508559</p>
+          <p style="margin: 0">
+            <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
+          </p>
+          <p style="margin: 0; padding: 15px 0">
+            <b>Призначення платежу: </b>Оплата згідно рахунку №23(№ замовлення)
+            від 11 липня 2024р (Дата замовлення).
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Адреса доставки</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0">Володимир Занкевич</p>
+          <p style="margin: 0">
+            Відділення №77 (до 30 кг): просп. Свободи, 5 (ТЦ « Плазма»)
+          </p>
+          <p style="margin: 0">Львів</p>
+          <p style="margin: 0">Львівська область</p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      border="1"
+      style="
+        max-width: 600px;
+        border-collapse: collapse;
+        width: 600px;
+        margin-bottom: 30px;
+        border: 1px solid rgb(160, 152, 152);
+      "
+    >
+      <tr style="background-color: #9a969638">
+        <th style="padding: 5px">Товар</th>
+        <th style="padding: 5px">Код товару</th>
+        <th style="padding: 5px">Кількість</th>
+        <th style="padding: 5px">Ціна</th>
+        <th style="padding: 5px">Разом</th>
+      </tr>
+      <tr style="text-align: center">
+        <td style="text-align: left; padding: 5px">
+          Акумулятор Samsung SDI INR21700-40T 35A 4000мАг
+        </td>
+        <td style="padding: 5px">1012</td>
+        <td style="padding: 5px">2</td>
+        <td style="padding: 5px">108 грн</td>
+        <td style="padding: 5px">216 грн</td>
+      </tr>
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px"><b>Разом</b></td>
+        <td style="padding: 5px">216 грн</td>
+      </tr>
+    </table>
+
+    <p style="color: #ff0505">
+      <b>При замовленні індивідуальної збірки - передоплата 20%</b>
+    </p>
+
+    <p style="max-width: 600px">
+      Якщо у Вас виникли будь-які запитання, дайте відповідь на це повідомлення,
+      або звяжіться із нами за номером телефону який вказаний на сайті.
+    </p>
+    <hr />
+    <p style="max-width: 600px">
+      Дякуємо за замовлення, <br />
+      З повагою команда BatteryFly
+    </p>
   </body>
 </html>`,
     
