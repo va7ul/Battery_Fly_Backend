@@ -221,7 +221,6 @@ const addOrder = async (req, res) => {
       style="
         border: 1px solid rgb(160, 152, 152);
         margin-bottom: 30px;
-        max-width: 600px;
         width: 600px;
       "
     >
@@ -230,6 +229,7 @@ const addOrder = async (req, res) => {
           border: 1px solid rgb(160, 152, 152);
           border-bottom: 0;
           text-align: left;
+          width: 600px;
           padding: 2px 7px;
           background-color: #9a969638;
         "
@@ -240,7 +240,7 @@ const addOrder = async (req, res) => {
         <td style="padding: 5px">
           <p style="margin: 0">${firstName +" " + lastName}</p>
           <p style="margin: 0">
-            ${warehouse || "Самовивіз"}
+            ${warehouse}
           </p>
           <p style="margin: 0">${city}</p>
         </td>
