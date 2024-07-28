@@ -127,15 +127,8 @@ const addOrder = async (req, res) => {
     user.orders.push(numberOfOrder)
   await user.save();
   
-  const orderInfo = cartItems.map(item => `<tr style="text-align: center">
-         <td style="text-align: left; padding: 5px">
-           ${item.name}
-         </td>
-         <td style="padding: 5px">${item.codeOfGood}</td>
-         <td style="padding: 5px">${item.quantityOrdered}</td>
-         <td style="padding: 5px">${item.price} грн</td>
-         <td style="padding: 5px">${item.totalPrice} грн</td>
-       </tr>`)
+    const today = new Date(Date.now());
+    const todayDate = (today.getDate() + '.' + (today.getMonth() + 1) + '.' + today.getFullYear());
 
     const emailText = {
     from: MAIL_USER,
@@ -171,7 +164,7 @@ const addOrder = async (req, res) => {
       <tr>
         <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
           <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
-          <p style="margin: 0"><b>Дата замовлення: </b>${order.createdAt}</p>
+          <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
           <p style="margin: 0">
             <b>Спосіб оплати: </b>${payment}
           </p>
@@ -218,7 +211,7 @@ const addOrder = async (req, res) => {
           </p>
           <p style="margin: 0; padding: 15px 0">
             <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
-            від ${order.createdAt}р.
+            від ${today.getDate() + '.' + (today.getMonth() + 1) + '.' + today.getFullYear()}р.
           </p>
         </td>
       </tr>
