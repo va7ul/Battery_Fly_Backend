@@ -262,19 +262,18 @@ const addOrder = async (req, res) => {
         <th style="padding: 5px">Ціна</th>
         <th style="padding: 5px">Разом</th>
       </tr>
-      ${cartItems.map(item => `<tr style="text-align: center">
-         <td style="text-align: left; padding: 5px">
+        <tr style="text-align: center">
+      ${cartItems.map(item => `<td style="text-align: left; padding: 5px">
            ${item.name}
          </td>
          <td style="padding: 5px">${item.codeOfGood}</td>
          <td style="padding: 5px">${item.quantityOrdered}</td>
-         <td style="padding: 5px">${item.priceOneProduct}</td>
-         <td style="padding: 5px">${item.totalPrice} грн</td>
-       </tr>`)}
-
+         <td style="padding: 5px">${item.price} грн</td>
+         <td style="padding: 5px">${item.totalPrice} грн</td>`)}
+        </tr>
       <tr style="text-align: center">
         <td colspan="4" style="padding: 5px"><b>Разом</b></td>
-        <td style="padding: 5px">216 грн</td>
+        <td style="padding: 5px">${order.total} грн</td>
       </tr>
     </table>
 
