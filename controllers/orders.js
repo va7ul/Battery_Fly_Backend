@@ -243,7 +243,6 @@ const addOrder = async (req, res) => {
             ${warehouse || "Самовивіз"}
           </p>
           <p style="margin: 0">${city}</p>
-          <p style="margin: 0">${city}</p>
         </td>
       </tr>
     </table>
