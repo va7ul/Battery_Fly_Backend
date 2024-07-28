@@ -130,7 +130,7 @@ const addOrder = async (req, res) => {
     const emailText = {
     from: MAIL_USER,
     to: email,
-    subject: 'Order',
+    subject: `Ваше замовлення №${numberOfOrder} прийнято в роботу`,
     html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
 <html lang="uk">
   <head>
@@ -138,7 +138,7 @@ const addOrder = async (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Document</title>
   </head>
-  <body>
+  <body style="width: 600px">
     <table
       style="
         border: 1px solid rgb(160, 152, 152);
@@ -160,16 +160,16 @@ const addOrder = async (req, res) => {
       </caption>
       <tr>
         <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
-          <p style="margin: 0"><b>Номер замовлення: </b>23</p>
-          <p style="margin: 0"><b>Дата замовлення: </b>11.07.2024</p>
+          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
+          <p style="margin: 0"><b>Дата замовлення: </b>${order.createdAt}</p>
           <p style="margin: 0">
-            <b>Спосіб оплати: </b>Картою по реквізитах фізичних осіб
+            <b>Спосіб оплати: </b>${payment}
           </p>
-          <p style="margin: 0"><b>Спосіб доставки: </b>Самовивіз</p>
+          <p style="margin: 0"><b>Спосіб доставки: </b>${deliveryType}</p>
         </td>
         <td style="padding: 5px">
-          <p style="margin: 0"><b>Е-mail: </b>velnaza@gmail.com</p>
-          <p style="margin: 0"><b>Телефон: </b>063-000-00-00</p>
+          <p style="margin: 0"><b>Е-mail: </b>${email}</p>
+          <p style="margin: 0"><b>Телефон: </b>${tel}</p>
           <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
         </td>
       </tr>
@@ -207,8 +207,8 @@ const addOrder = async (req, res) => {
             <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
           </p>
           <p style="margin: 0; padding: 15px 0">
-            <b>Призначення платежу: </b>Оплата згідно рахунку №23(№ замовлення)
-            від 11 липня 2024р (Дата замовлення).
+            <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
+            від ${order.createdAt}р.
           </p>
         </td>
       </tr>
@@ -235,12 +235,12 @@ const addOrder = async (req, res) => {
       </caption>
       <tr>
         <td style="padding: 5px">
-          <p style="margin: 0">Володимир Занкевич</p>
+          <p style="margin: 0">${firstName +" " + lastName}</p>
           <p style="margin: 0">
-            Відділення №77 (до 30 кг): просп. Свободи, 5 (ТЦ « Плазма»)
+            ${warehouse || "Самовивіз"}
           </p>
-          <p style="margin: 0">Львів</p>
-          <p style="margin: 0">Львівська область</p>
+          <p style="margin: 0">${city}</p>
+          <p style="margin: 0">${city}</p>
         </td>
       </tr>
     </table>
@@ -262,15 +262,16 @@ const addOrder = async (req, res) => {
         <th style="padding: 5px">Ціна</th>
         <th style="padding: 5px">Разом</th>
       </tr>
-      <tr style="text-align: center">
-        <td style="text-align: left; padding: 5px">
-          Акумулятор Samsung SDI INR21700-40T 35A 4000мАг
-        </td>
-        <td style="padding: 5px">1012</td>
-        <td style="padding: 5px">2</td>
-        <td style="padding: 5px">108 грн</td>
-        <td style="padding: 5px">216 грн</td>
-      </tr>
+      ${cartItems.map(item => `<tr style="text-align: center">
+         <td style="text-align: left; padding: 5px">
+           ${item.name}
+         </td>
+         <td style="padding: 5px">${item.codeOfGood}</td>
+         <td style="padding: 5px">${item.quantityOrdered}</td>
+         <td style="padding: 5px">${item.priceOneProduct}</td>
+         <td style="padding: 5px">${item.totalPrice} грн</td>
+       </tr>`)}
+
       <tr style="text-align: center">
         <td colspan="4" style="padding: 5px"><b>Разом</b></td>
         <td style="padding: 5px">216 грн</td>
@@ -278,20 +279,24 @@ const addOrder = async (req, res) => {
     </table>
 
     <p style="color: #ff0505">
-      <b>При замовленні індивідуальної збірки - передоплата 20%</b>
+      <b
+        >При замовленні індивідуальної збірки за умови накладеного платежу -
+        передоплата 20%</b
+      >
     </p>
 
-    <p style="max-width: 600px">
+    <p>
       Якщо у Вас виникли будь-які запитання, дайте відповідь на це повідомлення,
       або звяжіться із нами за номером телефону який вказаний на сайті.
     </p>
     <hr />
-    <p style="max-width: 600px">
-      Дякуємо за замовлення, <br />
-      З повагою команда BatteryFly
+    <p>
+      Дякуємо за замовлення! <br />
+      З повагою, команда BatteryFly
     </p>
   </body>
-</html>`,
+</html>
+`,
     
     };
     
