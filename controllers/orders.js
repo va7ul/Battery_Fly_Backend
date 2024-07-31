@@ -128,8 +128,9 @@ const addOrder = async (req, res) => {
   await user.save();
   
     const today = new Date(Date.now());
-    const todayDate = (today.getDate() + '.' + (today.getMonth() + 1) + '.' + today.getFullYear());
-
+    const todayDate = (day + '.' + month + '.' + today.getFullYear());
+    const month = (`0${today.getMonth() + 1}`).slice(-2) 
+    const day = (`0${today.getDate()}`).slice(-2)  
     const emailText = {
     from: MAIL_USER,
     to: email,
@@ -211,7 +212,7 @@ const addOrder = async (req, res) => {
           </p>
           <p style="margin: 0; padding: 15px 0">
             <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
-            від ${today.getDate() + '.' + (today.getMonth() + 1) + '.' + today.getFullYear()}р.
+            від ${day + '.' + month + '.' + today.getFullYear()}р.
           </p>
         </td>
       </tr>
