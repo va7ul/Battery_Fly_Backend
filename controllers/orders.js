@@ -128,9 +128,9 @@ const addOrder = async (req, res) => {
   await user.save();
   
     const today = new Date(Date.now());
-    const todayDate = (day + '.' + month + '.' + today.getFullYear());
-    const month = (`0${today.getMonth() + 1}`).slice(-2) 
     const day = (`0${today.getDate()}`).slice(-2)  
+    const month = (`0${today.getMonth() + 1}`).slice(-2) 
+    const todayDate = (day + '.' + month + '.' + today.getFullYear());
     const emailText = {
     from: MAIL_USER,
     to: email,
