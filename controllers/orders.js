@@ -120,12 +120,16 @@ const addOrder = async (req, res) => {
     }
 
     const user = await User.findOne({ email })
-    if (!user) {
-        throw HttpError(500, 'Internal server error, write order in DB');
-    }
-    console.log(user)
+    // if (!user) {
+    //     throw HttpError(500, 'Internal server error, write order in DB');
+  // }
+  
+  if (user) {
     user.orders.push(numberOfOrder)
-  await user.save();
+    await user.save();
+  }
+  
+    
   
     const today = new Date(Date.now());
     const day = (`0${today.getDate()}`).slice(-2)  
