@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', ctrl.get3dPrint);
 router.post(
   '/',
-  upload.array('files', 10),
+  upload.single('file'),
   validateBody(schemas.add3dPrintOrder),
   ctrl.add3dPrintOrder
 );
