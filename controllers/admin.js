@@ -682,7 +682,7 @@ const getFeedback = async (req, res) => {
 }
 
 const updateOrderById = async (req, res) => {
-  console.log("updateOrderById")
+  
   const { token } = req.user;
   
   const admin = await Admin.findOne({ token })
@@ -694,21 +694,194 @@ const updateOrderById = async (req, res) => {
   const { status, cartItems, email } = req.body;
 
   if (status === "В роботі") {
-    console.log("В роботі")
-    const order = await Order.findOne({ _id: req.params.id });
+   
 
     for (const item of cartItems) {
       const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: item.quantity - item.quantityOrdered }, { new: true })
-      console.log(product)
+      
       if (!product) {
           await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
+
+    const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
+    
+     if (!order) {
+    throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+    
     const textEmail = {
     from: MAIL_USER,
     to: email,
-    subject: 'Ваше замовлення прийняте в роботу',
-      html: `<p>Ваше замовлення прийняте в роботу</p>`,
+    subject: `Ваше замовлення №${order.numberOfOrder} прийнято в роботу`,
+      html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body style="width: 600px">
+  <p>
+      Дякуємо за покупку в магазині BatteryFly. Ваше замовлення отримане і
+      поступить в обробку найближчим часом.
+    </p>
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Деталі замовлення</b>
+      </caption>
+      <tr>
+        <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
+          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
+          <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
+          <p style="margin: 0">
+            <b>Спосіб оплати: </b>${payment}
+          </p>
+          <p style="margin: 0"><b>Спосіб доставки: </b>${deliveryType}</p>
+        </td>
+        <td style="padding: 5px">
+          <p style="margin: 0"><b>Е-mail: </b>${email}</p>
+          <p style="margin: 0"><b>Телефон: </b>${tel}</p>
+          <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Реквізити для оплати</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0; padding: 15px 0">
+            <b>Отримувач</b><br />ФОП Занкевич Володимир Михайлович
+          </p>
+          <p style="margin: 0">
+            <b>Рахунок отримувача</b><br />UA253808050000000260072159049
+          </p>
+          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3563508559</p>
+          <p style="margin: 0">
+            <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
+          </p>
+          <p style="margin: 0; padding: 15px 0">
+            <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
+            від ${day + '.' + month + '.' + today.getFullYear()}р.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Адреса доставки</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0">${firstName +" " + lastName}</p>
+          <p style="margin: 0">
+            ${warehouse}
+          </p>
+          <p style="margin: 0">${city}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      border="1"
+      style="
+        max-width: 600px;
+        border-collapse: collapse;
+        width: 600px;
+        margin-bottom: 30px;
+        border: 1px solid rgb(160, 152, 152);
+      "
+    >
+      <tr style="background-color: #9a969638">
+        <th style="padding: 5px">Товар</th>
+        <th style="padding: 5px">Код товару</th>
+        <th style="padding: 5px">Кількість</th>
+        <th style="padding: 5px">Ціна</th>
+        <th style="padding: 5px">Разом</th>
+      </tr>
+      ${cartItems.map(item => `<tr style="text-align: center">
+         <td style="text-align: left; padding: 5px">
+           ${item.name}
+         </td>
+         <td style="padding: 5px">${item.codeOfGood}</td>
+         <td style="padding: 5px">${item.quantityOrdered}</td>
+         <td style="padding: 5px">${item.price} грн</td>
+         <td style="padding: 5px">${item.totalPrice} грн</td>
+       </tr>`).join(" ")}
+
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px"><b>Разом</b></td>
+        <td style="padding: 5px">${order.total} грн</td>
+      </tr>
+    </table>
+
+    <p style="color: #ff0505">
+      <b
+        >При замовленні індивідуальної збірки за умови накладеного платежу -
+        передоплата 20%</b
+      >
+    </p>
+
+    <p>
+      Якщо у Вас виникли будь-які запитання, дайте відповідь на це повідомлення,
+      або звяжіться із нами за номером телефону який вказаний на сайті.
+    </p>
+    <hr />
+    <p>
+      Дякуємо за замовлення! <br />
+      З повагою, команда BatteryFly
+    </p>
+  </body>
+</html>`,
       
   };
 
@@ -719,22 +892,21 @@ const updateOrderById = async (req, res) => {
     console.log("Скасовано")
 
     const order = await Order.findOne({ _id: req.params.id });
-    if (order.status === "В роботі") {
+    if (order.status === "Скасовано") {
       for (const item of cartItems) {
       const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
       
       if (!product) {
          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
       }
-    }
-    }
-    
-  }
-
-  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, {new: true});
+      }
+      const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, {new: true});
   
   if (!order) {
     throw HttpError(500, 'Internal server eror, write code in DB');
+  }
+    }
+    
   }
 
     res.status(200).json({
