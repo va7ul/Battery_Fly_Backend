@@ -41,9 +41,32 @@ const register = async (req, res) => {
   const verifyEmail = {
     from: MAIL_USER,
     to: email,
-    subject: 'Verify email',
-    html: `<a target="_blank" href="https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}">Click to verify your email</a>`,
-    text: `Click to verify your email https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}`,
+    subject: 'Верифікація пошти BatteryFly',
+    html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body style="width: 600px">
+    <p>Дякуємо, що обрали BatteryFly!</p>
+    <p>Щоб завершити реєстрацію, будь ласка, перейдіть за посиланням нижче:</p>
+    <a href="https://battery-fly-backend.onrender.com/api/user/verify/${verificationToken}"
+      >Підтвердити електронну адресу</a
+    >
+    <p>
+      Після цього ви зможете увійти в свій обліковий запис, використовуючи логін
+      і пароль, які ви створили під час реєстрації.
+    </p>
+    <p>
+      Якщо ви не робили цього запиту або отримали цей лист помилково, просто
+      ігноруйте його.
+    </p>
+    <hr />
+    <p>З повагою, <br />Команда BatteryFly</p>
+  </body>
+</html>`,
   };
 
   await sendEmail(verifyEmail);
@@ -128,7 +151,7 @@ const getCurrent = async (req, res) => {
 };
 
 const forgotPassword = async (req, res) => {
-  console.log("resetPassword")
+  
   
   const {email} = req.body
   const user = await User.findOne({email})
@@ -141,7 +164,7 @@ const forgotPassword = async (req, res) => {
 	length: 10,
 	numbers: true
   });
-  console.log(password)
+  
 
   const passwordHash = await bcrypt.hash(password, 10);
   user.password = passwordHash;
@@ -154,9 +177,25 @@ const forgotPassword = async (req, res) => {
   const verifyEmail = {
     from: MAIL_USER,
     to: email,
-    subject: 'Reset password',
-    html: `<p>Ваш новий пароль: ${password}</p></br>
-    Заходьте на сайт з новим паролем. Цей пароль постійний, але Ви можете його змінити в особистому кабінеті`,
+    subject: 'Відновлення паролю BatteryFly',
+    html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body style="width: 600px">
+    <p>Ваш новий пароль <b>${password}</b></p>
+    <p>
+      Заходьте на сайт з новим паролем. Цей пароль постійний, але Ви можете його
+      змінити в особистому кабінеті.
+    </p>
+    <p>Дякуємо, що обрали BatteryFly!</p>
+    <hr />
+    <p>З повагою, <br />Команда BatteryFly</p>
+  </body>
+</html>`,
    
   };
     await sendEmail(verifyEmail);

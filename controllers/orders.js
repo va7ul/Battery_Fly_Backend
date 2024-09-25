@@ -120,9 +120,6 @@ const addOrder = async (req, res) => {
     }
 
     const user = await User.findOne({ email })
-    // if (!user) {
-    //     throw HttpError(500, 'Internal server error, write order in DB');
-  // }
   
   if (user) {
     user.orders.push(numberOfOrder)
@@ -138,7 +135,7 @@ const addOrder = async (req, res) => {
     const emailText = {
     from: MAIL_USER,
     to: email,
-    subject: `Ваше замовлення №${numberOfOrder} прийнято в роботу`,
+    subject: `Ваше замовлення №${numberOfOrder} оформлено`,
     html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
 <html lang="uk">
   <head>
@@ -147,160 +144,22 @@ const addOrder = async (req, res) => {
     <title>Document</title>
   </head>
   <body style="width: 600px">
-    <table
-      style="
-        border: 1px solid rgb(160, 152, 152);
-        margin-bottom: 30px;
-        max-width: 600px;
-        width: 600px;
-      "
-    >
-      <caption
-        style="
-          border: 1px solid rgb(160, 152, 152);
-          border-bottom: 0;
-          text-align: left;
-          padding: 2px 7px;
-          background-color: #9a969638;
-        "
-      >
-        <b>Деталі замовлення</b>
-      </caption>
-      <tr>
-        <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
-          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
-          <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
-          <p style="margin: 0">
-            <b>Спосіб оплати: </b>${payment}
-          </p>
-          <p style="margin: 0"><b>Спосіб доставки: </b>${deliveryType}</p>
-        </td>
-        <td style="padding: 5px">
-          <p style="margin: 0"><b>Е-mail: </b>${email}</p>
-          <p style="margin: 0"><b>Телефон: </b>${tel}</p>
-          <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
-        </td>
-      </tr>
-    </table>
-
-    <table
-      style="
-        border: 1px solid rgb(160, 152, 152);
-        margin-bottom: 30px;
-        max-width: 600px;
-        width: 600px;
-      "
-    >
-      <caption
-        style="
-          border: 1px solid rgb(160, 152, 152);
-          border-bottom: 0;
-          text-align: left;
-          padding: 2px 7px;
-          background-color: #9a969638;
-        "
-      >
-        <b>Реквізити для оплати</b>
-      </caption>
-      <tr>
-        <td style="padding: 5px">
-          <p style="margin: 0; padding: 15px 0">
-            <b>Отримувач</b><br />ФОП Занкевич Володимир Михайлович
-          </p>
-          <p style="margin: 0">
-            <b>Рахунок отримувача</b><br />UA253808050000000260072159049
-          </p>
-          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3563508559</p>
-          <p style="margin: 0">
-            <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
-          </p>
-          <p style="margin: 0; padding: 15px 0">
-            <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
-            від ${day + '.' + month + '.' + today.getFullYear()}р.
-          </p>
-        </td>
-      </tr>
-    </table>
-
-    <table
-      style="
-        border: 1px solid rgb(160, 152, 152);
-        margin-bottom: 30px;
-        max-width: 600px;
-        width: 600px;
-      "
-    >
-      <caption
-        style="
-          border: 1px solid rgb(160, 152, 152);
-          border-bottom: 0;
-          text-align: left;
-          padding: 2px 7px;
-          background-color: #9a969638;
-        "
-      >
-        <b>Адреса доставки</b>
-      </caption>
-      <tr>
-        <td style="padding: 5px">
-          <p style="margin: 0">${firstName +" " + lastName}</p>
-          <p style="margin: 0">
-            ${warehouse}
-          </p>
-          <p style="margin: 0">${city}</p>
-        </td>
-      </tr>
-    </table>
-
-    <table
-      border="1"
-      style="
-        max-width: 600px;
-        border-collapse: collapse;
-        width: 600px;
-        margin-bottom: 30px;
-        border: 1px solid rgb(160, 152, 152);
-      "
-    >
-      <tr style="background-color: #9a969638">
-        <th style="padding: 5px">Товар</th>
-        <th style="padding: 5px">Код товару</th>
-        <th style="padding: 5px">Кількість</th>
-        <th style="padding: 5px">Ціна</th>
-        <th style="padding: 5px">Разом</th>
-      </tr>
-      ${cartItems.map(item => `<tr style="text-align: center">
-         <td style="text-align: left; padding: 5px">
-           ${item.name}
-         </td>
-         <td style="padding: 5px">${item.codeOfGood}</td>
-         <td style="padding: 5px">${item.quantityOrdered}</td>
-         <td style="padding: 5px">${item.price} грн</td>
-         <td style="padding: 5px">${item.totalPrice} грн</td>
-       </tr>`).join(" ")}
-
-      <tr style="text-align: center">
-        <td colspan="4" style="padding: 5px"><b>Разом</b></td>
-        <td style="padding: 5px">${order.total} грн</td>
-      </tr>
-    </table>
-
-    <p style="color: #ff0505">
-      <b
-        >При замовленні індивідуальної збірки за умови накладеного платежу -
-        передоплата 20%</b
-      >
-    </p>
-
+    <b>Ваше замовлення успішно оформлене!</b>
     <p>
-      Якщо у Вас виникли будь-які запитання, дайте відповідь на це повідомлення,
-      або звяжіться із нами за номером телефону який вказаний на сайті.
+      Дякуємо за ваше замовлення в BatteryFly! Ми раді повідомити, що ваше
+      замовлення №${numberOfOrder} було успішно прийнято.
     </p>
+    <p>
+      Незабаром ми зв’яжемось з вами для уточнення деталей та подальших кроків.
+    </p>
+    <p>
+      Якщо у вас виникли запитання, зв'яжіться з нашою підтримкою: <br />тел.
+      <a href="tel:+380509686485">+38(050)968-64-85</a>, e-mail
+      <a href="mailto:batteryfly@meta.ua">batteryfly@meta.ua</a>
+    </p>
+    <p>Дякуємо, що обрали BatteryFly! Чекаємо на вашу відповідь.</p>
     <hr />
-    <p>
-      Дякуємо за замовлення! <br />
-      З повагою, команда BatteryFly
-    </p>
+    <p>З повагою, <br />Команда BatteryFly</p>
   </body>
 </html>
 `,
