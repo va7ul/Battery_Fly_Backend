@@ -154,7 +154,7 @@ const addOrder = async (req, res) => {
     </p>
     <p>
       Якщо у вас виникли запитання, зв'яжіться з нашою підтримкою: <br />тел.
-      <a href="tel:+380509686485">+38(050)968-64-85</a>, e-mail
+      <a href="tel:+380509686485">+38(050)968-64-85</a>, <br />e-mail
       <a href="mailto:batteryfly@meta.ua">batteryfly@meta.ua</a>
     </p>
     <p>Дякуємо, що обрали BatteryFly! Чекаємо на вашу відповідь.</p>
