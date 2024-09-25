@@ -690,6 +690,11 @@ const updateOrderById = async (req, res) => {
   if (!admin) {
     throw HttpError(404, 'Not Found');
   }
+
+  const today = new Date(Date.now());
+  const day = (`0${today.getDate()}`).slice(-2)
+  const month = (`0${today.getMonth() + 1}`).slice(-2)
+  const todayDate = (day + '.' + month + '.' + today.getFullYear());
   
   const { status, cartItems, email } = req.body;
 
@@ -700,20 +705,20 @@ const updateOrderById = async (req, res) => {
       const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: item.quantity - item.quantityOrdered }, { new: true })
       
       if (!product) {
-          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
+        await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
       }
     }
 
     const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
     
-     if (!order) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    if (!order) {
+      throw HttpError(500, 'Internal server eror, write code in DB');
     }
     
     const textEmail = {
-    from: MAIL_USER,
-    to: email,
-    subject: `Ваше замовлення №${order.numberOfOrder} прийнято в роботу`,
+      from: MAIL_USER,
+      to: email,
+      subject: `Ваше замовлення №${order.numberOfOrder} прийнято в роботу`,
       html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
 <html lang="uk">
   <head>
@@ -747,16 +752,16 @@ const updateOrderById = async (req, res) => {
       </caption>
       <tr>
         <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
-          <p style="margin: 0"><b>Номер замовлення: </b>${numberOfOrder}</p>
+          <p style="margin: 0"><b>Номер замовлення: </b>${order.numberOfOrder}</p>
           <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
           <p style="margin: 0">
-            <b>Спосіб оплати: </b>${payment}
+            <b>Спосіб оплати: </b>${order.payment}
           </p>
-          <p style="margin: 0"><b>Спосіб доставки: </b>${deliveryType}</p>
+          <p style="margin: 0"><b>Спосіб доставки: </b>${order.deliveryType}</p>
         </td>
         <td style="padding: 5px">
-          <p style="margin: 0"><b>Е-mail: </b>${email}</p>
-          <p style="margin: 0"><b>Телефон: </b>${tel}</p>
+          <p style="margin: 0"><b>Е-mail: </b>${order.email}</p>
+          <p style="margin: 0"><b>Телефон: </b>${order.tel}</p>
           <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
         </td>
       </tr>
@@ -794,7 +799,7 @@ const updateOrderById = async (req, res) => {
             <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
           </p>
           <p style="margin: 0; padding: 15px 0">
-            <b>Призначення платежу: </b>Оплата згідно рахунку №${numberOfOrder}
+            <b>Призначення платежу: </b>Оплата згідно рахунку №${order.numberOfOrder}
             від ${day + '.' + month + '.' + today.getFullYear()}р.
           </p>
         </td>
@@ -822,11 +827,11 @@ const updateOrderById = async (req, res) => {
       </caption>
       <tr>
         <td style="padding: 5px">
-          <p style="margin: 0">${firstName +" " + lastName}</p>
+          <p style="margin: 0">${order.firstName + " " + order.lastName}</p>
           <p style="margin: 0">
-            ${warehouse}
+            ${order.warehouse}
           </p>
-          <p style="margin: 0">${city}</p>
+          <p style="margin: 0">${order.city}</p>
         </td>
       </tr>
     </table>
@@ -883,36 +888,38 @@ const updateOrderById = async (req, res) => {
   </body>
 </html>`,
       
-  };
+    };
 
-  await sendEmail(textEmail);
+    await sendEmail(textEmail);
+    
+    res.status(200).json({
+      result: order
+    });
   }
 
   if (status === "Скасовано") {
     console.log("Скасовано")
 
     const order = await Order.findOne({ _id: req.params.id });
-    if (order.status === "Скасовано") {
+    if (order.status === "В роботі") {
       for (const item of cartItems) {
-      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+        const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
       
-      if (!product) {
-         await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+        if (!product) {
+          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+        }
       }
-      }
-      const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, {new: true});
+      const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
   
-  if (!order) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-    }
-    
-  }
-
-    res.status(200).json({
+      if (!order) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+      }
+      res.status(200).json({
         result: order
       });
-}
+    }
+  }
+};
 
 
 
