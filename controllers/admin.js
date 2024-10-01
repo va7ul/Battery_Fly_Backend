@@ -919,6 +919,15 @@ const updateOrderById = async (req, res) => {
       });
     }
   }
+
+  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
+  
+      if (!order) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+      }
+      res.status(200).json({
+        result: order
+      });
 };
 
 
