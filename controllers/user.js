@@ -78,7 +78,7 @@ const verifyEmail = async (req, res) => {
 
   await user.save();
   
-  res.redirect(301, 'https://va7ul.github.io/Battery_Fly_Frontend/main');
+  res.redirect(301, 'https://www.batteryfly.com.ua');
 
 };
 
