@@ -873,7 +873,7 @@ const updateOrderById = async (req, res) => {
       <tr style="text-align: center">
         <td colspan="4" style="padding: 5px"><b>Сума до оплати</b></td>
         <td style="padding: 5px">
-          ${order.total}<br />
+          ${order.together}<br />
           грн
         </td>
       </tr>
