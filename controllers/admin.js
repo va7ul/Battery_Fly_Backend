@@ -870,8 +870,8 @@ const updateOrderById = async (req, res) => {
         </td>
       </tr>
       <tr style="text-align: center">
-        <td colspan="4" style="padding: 5px; color: forestgreen">Знижка</td>
-        <td style="padding: 5px; color: forestgreen">
+        <td colspan="4" style="padding: 5px; color: #228b22">Знижка</td>
+        <td style="padding: 5px; color: #228b22">
           ${order.discountValue}<br />
           грн
         </td>
