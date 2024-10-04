@@ -859,13 +859,23 @@ const updateOrderById = async (req, res) => {
          </td>
          <td style="padding: 5px">${item.codeOfGood}</td>
          <td style="padding: 5px">${item.quantityOrdered}</td>
-         <td style="padding: 5px">${item.price} грн</td>
-         <td style="padding: 5px">${item.totalPrice} грн</td>
+         <td style="padding: 5px">${item.price}<br /> грн</td>
+         <td style="padding: 5px">${item.totalPrice}<br /> грн</td>
        </tr>`).join(" ")}
 
       <tr style="text-align: center">
-        <td colspan="4" style="padding: 5px"><b>Разом</b></td>
-        <td style="padding: 5px">${order.total} грн</td>
+        <td colspan="4" style="padding: 5px">Знижка</td>
+        <td style="padding: 5px">
+          ${order.discountValue}<br />
+          грн
+        </td>
+      </tr>
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px"><b>Сума до оплати</b></td>
+        <td style="padding: 5px">
+          ${order.total}<br />
+          грн
+        </td>
       </tr>
     </table>
 
