@@ -789,12 +789,12 @@ const updateOrderById = async (req, res) => {
       <tr>
         <td style="padding: 5px">
           <p style="margin: 0; padding: 15px 0">
-            <b>Отримувач</b><br />ФОП Занкевич Володимир Михайлович
+            <b>Отримувач</b><br />ФОП Солонинка Володимир Степанович
           </p>
           <p style="margin: 0">
-            <b>Рахунок отримувача</b><br />UA253808050000000260072159049
+            <b>Рахунок отримувача</b><br />UA393003350000000260092385042
           </p>
-          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3563508559</p>
+          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3599611856</p>
           <p style="margin: 0">
             <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
           </p>
