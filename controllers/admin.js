@@ -1,445 +1,457 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const { MAIL_USER } = process.env;
 const { SECRET_KEY } = process.env;
-const { HttpError, ctrlWrapper, cloudImageProduct, sendEmail } = require('../helpers');
-const { Admin } = require('../models/admin');
-const { CodeOfGoods } = require('../models/codeOdGoods');
-const { Product } = require('../models/product');
-const { ProductZbirky } = require('../models/products_zbirky');
-const { Hero } = require('../models/hero');
-const { Order } = require('../models/order');
-const { Print3dOrder } = require('../models/print3d');
-const { QuickOrder } = require('../models/quickOrder');
-const { User } = require('../models/user');
-const { PromoCode } = require('../models/promoCode');
-const {FeedBack} = require('../models/feedback')
-
-
-
+const {
+  HttpError,
+  ctrlWrapper,
+  cloudImageProduct,
+  sendEmail,
+} = require("../helpers");
+const { Admin } = require("../models/admin");
+const { CodeOfGoods } = require("../models/codeOdGoods");
+const { Product } = require("../models/product");
+const { ProductZbirky } = require("../models/products_zbirky");
+const { Hero } = require("../models/hero");
+const { Order } = require("../models/order");
+const { Print3dOrder } = require("../models/print3d");
+const { QuickOrder } = require("../models/quickOrder");
+const { User } = require("../models/user");
+const { PromoCode } = require("../models/promoCode");
+const { FeedBack } = require("../models/feedback");
 
 const login = async (req, res) => {
   const { login, password } = req.body;
   const user = await Admin.findOne({ login });
   if (!user) {
-    throw HttpError(401, 'Email or password is wrong');
+    throw HttpError(401, "Email or password is wrong");
   }
 
   const passwordCompare = await bcrypt.compare(password, user.password);
   if (!passwordCompare) {
-    throw HttpError(401, 'Email or password is wrong');
+    throw HttpError(401, "Email or password is wrong");
   }
 
   const payload = { id: user._id };
-  const token = jwt.sign(payload, SECRET_KEY, { expiresIn: '1y' });
+  const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "1y" });
   await Admin.findByIdAndUpdate(user._id, { token });
 
   res.status(200).json({
-      login,
-      token,
+    login,
+    token,
   });
 };
 
 const logout = async (req, res) => {
   const { _id } = req.user;
-  await Admin.findByIdAndUpdate(_id, { token: '' });
+  await Admin.findByIdAndUpdate(_id, { token: "" });
 
   res.status(204).end();
 };
 
 const getCurrent = async (req, res) => {
-  const {
-    login,
-    token,
-  } = req.user;
+  const { login, token } = req.user;
 
   res.status(200).json({
-      login,
-      token,
+    login,
+    token,
   });
 };
 
-
 const addProduct = async (req, res) => {
-  console.log("addProduct")
-    
+  console.log("addProduct");
+
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
-  const code = await CodeOfGoods.findOne({})
+  const code = await CodeOfGoods.findOne({});
 
-  const codeOfGood = code.codeCounter += 1;
+  const codeOfGood = (code.codeCounter += 1);
 
   const result = await code.save();
   if (!result) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
-  
-  const images = await cloudImageProduct(req.files)
 
+  const images = await cloudImageProduct(req.files);
 
-  const addResult = await Product.create({ ...req.body, codeOfGood, image: images })
-    
-  
+  const addResult = await Product.create({
+    ...req.body,
+    codeOfGood,
+    image: images,
+  });
+
   if (!addResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
-  res.status(200).json({ addResult })
+  res.status(200).json({ addResult });
 };
 
 const editProduct = async (req, res) => {
-  console.log("editProduct")
-    
+  console.log("editProduct");
+
   const { token } = req.user;
   const { id } = req.params;
-  const admin = await Admin.findOne({ token })
-    
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   if (req.files.length > 0) {
+    const images = await cloudImageProduct(req.files);
 
-    const images = await cloudImageProduct(req.files)
+    const editResult = await Product.findOneAndUpdate(
+      { codeOfGood: id },
+      { ...req.body, image: images },
+      { new: true }
+    );
 
-    const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body, image: images }, { new: true })
-    
     if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-  res.status(200).json({ editResult })
+      throw HttpError(500, "Internal server eror, write code in DB");
+    }
+    res.status(200).json({ editResult });
   }
 
-  const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body}, { new: true })
-  
+  const editResult = await Product.findOneAndUpdate(
+    { codeOfGood: id },
+    { ...req.body },
+    { new: true }
+  );
+
   if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
-  res.status(200).json({ editResult })
+  res.status(200).json({ editResult });
 };
 
 const addProductZbirky = async (req, res) => {
-    console.log("addProductZbirky")
-   
-    const {token} = req.user;
+  console.log("addProductZbirky");
 
-    const admin = await Admin.findOne({ token })
-    
-    if (!admin) {
-        throw HttpError(404, 'Not Found');
-    }
+  const { token } = req.user;
 
-    const code = await CodeOfGoods.findOne({})
-   
-    const codeOfGood= code.codeCounter += 1;
+  const admin = await Admin.findOne({ token });
 
-    const result = await code.save();
-    if (!result) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
+  if (!admin) {
+    throw HttpError(404, "Not Found");
   }
-  const capacity = JSON.parse(req.body.capacity)
+
+  const code = await CodeOfGoods.findOne({});
+
+  const codeOfGood = (code.codeCounter += 1);
+
+  const result = await code.save();
+  if (!result) {
+    throw HttpError(500, "Internal server eror, write code in DB");
+  }
+  const capacity = JSON.parse(req.body.capacity);
 
   const newCapacity = {};
 
   for (const cap of capacity) {
-    const key = Object.keys(cap)
-    
-    newCapacity[key[0]] = cap[key[0]]
+    const key = Object.keys(cap);
+
+    newCapacity[key[0]] = cap[key[0]];
   }
-  
 
-    const images = await cloudImageProduct(req.files)
+  const images = await cloudImageProduct(req.files);
 
-    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images, capacity: {...newCapacity} })
-    if (!addResult) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
-    }
-  res.status(200).json({addResult})
-
-  
+  const addResult = await ProductZbirky.create({
+    ...req.body,
+    codeOfGood,
+    image: images,
+    capacity: { ...newCapacity },
+  });
+  if (!addResult) {
+    throw HttpError(500, "Internal server eror, write code in DB");
+  }
+  res.status(200).json({ addResult });
 };
 
 const editProductZbirky = async (req, res) => {
-  console.log("editProductZbirky")
-    
+  console.log("editProductZbirky");
+
   const { token } = req.user;
   const { id } = req.params;
-  const admin = await Admin.findOne({ token })
-    
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
-  const capacity = JSON.parse(req.body.capacity)
-  
+  const capacity = JSON.parse(req.body.capacity);
+
   let newCapacity = {};
 
   for (const cap of capacity) {
-    const key = Object.keys(cap)
-    
-    newCapacity[key[0]] = cap[key[0]]
+    const key = Object.keys(cap);
+
+    newCapacity[key[0]] = cap[key[0]];
   }
 
   if (req.files.length > 0) {
+    const images = await cloudImageProduct(req.files);
 
-    const images = await cloudImageProduct(req.files)
+    const capacity = JSON.parse(req.body.capacity);
 
-     const capacity = JSON.parse(req.body.capacity)
+    const editResult = await ProductZbirky.findOneAndUpdate(
+      { codeOfGood: id },
+      { ...req.body, capacity: { ...newCapacity }, image: images },
+      { new: true }
+    );
 
-  
-
-    const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}, image: images }, { new: true })
-    
     if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-  res.status(200).json({ editResult })
+      throw HttpError(500, "Internal server eror, write code in DB");
+    }
+    res.status(200).json({ editResult });
   }
 
-  const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}}, { new: true })
-  
+  const editResult = await ProductZbirky.findOneAndUpdate(
+    { codeOfGood: id },
+    { ...req.body, capacity: { ...newCapacity } },
+    { new: true }
+  );
+
   if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
-  res.status(200).json({ editResult })
+  res.status(200).json({ editResult });
 };
 
 const changeHeaderInfo = async (req, res) => {
+  const { token } = req.user;
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const { text } = req.body;
   const { id } = req.params;
 
   if (!req.file) {
-    const hero = await Hero.findByIdAndUpdate({ _id: id }, { text }, { new: true });
-    
+    const hero = await Hero.findByIdAndUpdate(
+      { _id: id },
+      { text },
+      { new: true }
+    );
+
     if (!hero) {
-    throw HttpError(400, 'Wrong id');
-  }
+      throw HttpError(400, "Wrong id");
+    }
 
-    await hero.save()
-    
-    res.status(200).json({ hero })
-    
-  };
+    await hero.save();
+
+    res.status(200).json({ hero });
+  }
   const arr = [];
-  arr.push(req.file)
+  arr.push(req.file);
 
-  const img = await cloudImageProduct(arr)
+  const img = await cloudImageProduct(arr);
 
+  const hero = await Hero.findByIdAndUpdate(
+    { _id: id },
+    { text, image: img[0] },
+    { new: true }
+  );
 
-  const hero = await Hero.findByIdAndUpdate({ _id: id }, {text, image: img[0]}, {new: true});
-  
   if (!hero) {
-    throw HttpError(400, 'Wrong id');
+    throw HttpError(400, "Wrong id");
   }
 
-  await hero.save()
+  await hero.save();
 
-
-
-res.status(200).json({ hero })
-
-}
+  res.status(200).json({ hero });
+};
 
 const addHeaderInfo = async (req, res) => {
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const { text } = req.body;
   const arr = [];
-  arr.push(req.file)
+  arr.push(req.file);
 
-  const img = await cloudImageProduct(arr)
+  const img = await cloudImageProduct(arr);
 
+  const hero = await Hero.create({ text, image: img[0] });
 
-  const hero = await Hero.create({ text, image: img[0]});
-  
   if (!hero) {
-    throw HttpError(500, 'Internal server error');
+    throw HttpError(500, "Internal server error");
   }
 
-  res.status(200).json({ hero })
+  res.status(200).json({ hero });
 };
 
 const deleteHeaderInfo = async (req, res) => {
-  console.log("deleteHeaderInfo")
+  console.log("deleteHeaderInfo");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { id } = req.params;
 
-  const hero = await Hero.findByIdAndDelete({_id: id});
+  const hero = await Hero.findByIdAndDelete({ _id: id });
 
   if (!hero) {
-    throw HttpError(400, 'Wrong id');
+    throw HttpError(400, "Wrong id");
   }
 
-  res.status(200).json({ id , message: "Delete successful" })
-
-}
+  res.status(200).json({ id, message: "Delete successful" });
+};
 
 const getOrders = async (req, res) => {
-  console.log("getOrders")
-  
-    const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  console.log("getOrders");
+
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
-        const orders = await Order.find({}).sort({ numberOfOrder: -1 });
-        
-        const result = orders.map(order => {
-        return {
-          numberOfOrder: order.numberOfOrder,
-          firstName: order.firstName,
-          lastName: order.lastName,
-          email: order.email,
-          comment: order.comment,
-          tel: order.tel,
-          total: order.total,
-          promoCode: order.promoCode,
-          promoCodeDiscount: order.promoCodeDiscount,
-          discountValue: order.discountValue,
-          together: order.together,
-          cartItems: order.cartItems,
-          deliveryType: order.deliveryType,
-          city: order.city,
-          warehouse: order.warehouse,
-          payment: order.payment,
-          createdAt: order.createdAt,
-          status: order.status,
-        };
-        })
-        
-        res.status(200).json({
-        result
-      });
-        
-    
-}
+  const orders = await Order.find({}).sort({ numberOfOrder: -1 });
+
+  const result = orders.map((order) => {
+    return {
+      numberOfOrder: order.numberOfOrder,
+      firstName: order.firstName,
+      lastName: order.lastName,
+      email: order.email,
+      comment: order.comment,
+      tel: order.tel,
+      total: order.total,
+      promoCode: order.promoCode,
+      promoCodeDiscount: order.promoCodeDiscount,
+      discountValue: order.discountValue,
+      together: order.together,
+      cartItems: order.cartItems,
+      deliveryType: order.deliveryType,
+      city: order.city,
+      warehouse: order.warehouse,
+      payment: order.payment,
+      createdAt: order.createdAt,
+      status: order.status,
+    };
+  });
+
+  res.status(200).json({
+    result,
+  });
+};
 
 const getOrderById = async (req, res) => {
-  console.log("getOrderById")
+  console.log("getOrderById");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-  
-    const order = await Order.findOne({numberOfOrder: req.params.id});
 
-    res.status(200).json({
-        result: order
-      });
-}
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, "Not Found");
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.id });
+
+  res.status(200).json({
+    result: order,
+  });
+};
 
 const get3dPrintOrders = async (req, res) => {
-  console.log("get3dPrintOrders")
+  console.log("get3dPrintOrders");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const orders = await Print3dOrder.find({}).sort({ numberOfOrder: -1 });
 
   res.status(200).json({
-    result: orders
+    result: orders,
   });
 };
 
 const get3dPrintOrderById = async (req, res) => {
-  console.log("get3dPrintOrderById")
+  console.log("get3dPrintOrderById");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const order = await Print3dOrder.findOne({ numberOfOrder: req.params.id });
 
   res.status(200).json({
-    result: order
+    result: order,
   });
 };
 
 const getQuickOrders = async (req, res) => {
-  console.log("getQuickOrders")
+  console.log("getQuickOrders");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-  
-    const orders = await QuickOrder.find({}).sort({ numberOfOrder: -1 });
 
-    res.status(200).json({
-        result: orders
-      });
-}
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, "Not Found");
+  }
+
+  const orders = await QuickOrder.find({}).sort({ numberOfOrder: -1 });
+
+  res.status(200).json({
+    result: orders,
+  });
+};
 
 const getQuickOrderById = async (req, res) => {
-  console.log("getQuickOrderById")
+  console.log("getQuickOrderById");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const order = await QuickOrder.findOne({ numberOfOrder: req.params.id });
 
   res.status(200).json({
-    result: order
+    result: order,
   });
 };
 
 const getUsers = async (req, res) => {
-  console.log("getUsers")
+  console.log("getUsers");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
-  
+
   const users = await User.find(
     {},
     { password: 0, verificationToken: 0, token: 0 }
@@ -456,25 +468,28 @@ const getUsers = async (req, res) => {
   //   verifiedEmail: user.verifiedEmail,
   //   favorites: user.favorites,
   //   promoCodes: user.promoCodes
-  
+
   res.status(200).json({
-    users
+    users,
   });
-}
+};
 
 const getUserById = async (req, res) => {
-  console.log("getUserById")
+  console.log("getUserById");
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
-  const {id} = req.params
-  
-  const user = await User.findOne({_id: id}, {"password": 0,"verificationToken": 0, "token": 0});
+  const { id } = req.params;
+
+  const user = await User.findOne(
+    { _id: id },
+    { password: 0, verificationToken: 0, token: 0 }
+  );
 
   // _id: user._id,
   //   firstName: user.firstName,
@@ -487,180 +502,180 @@ const getUserById = async (req, res) => {
   //   verifiedEmail: user.verifiedEmail,
   //   favorites: user.favorites,
   //   promoCodes: user.promoCodes
-  
+
   res.status(200).json({
-    user
+    user,
   });
-}
+};
 
 const getPromocode = async (req, res) => {
-  console.log("getPromocode")
+  console.log("getPromocode");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const promo = await PromoCode.find({}).sort({ createdAt: -1 });
-  
 
   if (!promo) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
   res.status(200).json({
-    promo
+    promo,
   });
-}
+};
 
 const addPromocode = async (req, res) => {
-  console.log("addPromocode")
+  console.log("addPromocode");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { name } = req.body;
 
-  const oldCode = await PromoCode.findOne({ name })
-  
+  const oldCode = await PromoCode.findOne({ name });
+
   if (oldCode) {
-    throw HttpError(409, 'Promocode with the same name already exists');
+    throw HttpError(409, "Promocode with the same name already exists");
   }
 
-  const promo = await PromoCode.create({...req.body});
+  const promo = await PromoCode.create({ ...req.body });
 
   if (!promo) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
   res.status(200).json({
-    promo
+    promo,
   });
-}
+};
 
 const updatePromocode = async (req, res) => {
-  console.log("updatePromocode")
+  console.log("updatePromocode");
 
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { id } = req.params;
 
-  const promo = await PromoCode.findByIdAndUpdate({ _id: id }, { ...req.body }, { new: true });
+  const promo = await PromoCode.findByIdAndUpdate(
+    { _id: id },
+    { ...req.body },
+    { new: true }
+  );
 
   if (!promo) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
   res.status(200).json({
-    promo
+    promo,
   });
 };
 
 const deletePromocode = async (req, res) => {
-  console.log("deletePromocode")
+  console.log("deletePromocode");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { id } = req.params;
 
   const promo = await PromoCode.findOne({ _id: id });
-  
-  const promoInUse = await User.findOne({ promoCodes: promo.name })
-  
+
+  const promoInUse = await User.findOne({ promoCodes: promo.name });
+
   if (promoInUse) {
-    throw HttpError(500, 'Promocode in use');
+    throw HttpError(500, "Promocode in use");
   }
- 
-  const promoDelete = await PromoCode.findByIdAndDelete({_id: id});
+
+  const promoDelete = await PromoCode.findByIdAndDelete({ _id: id });
 
   if (!promoDelete) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
-  res.status(200).json({ id, message: "Delete successful" })
-
-}
+  res.status(200).json({ id, message: "Delete successful" });
+};
 
 const deleteProduct = async (req, res) => {
-  console.log("deleteProduct")
+  console.log("deleteProduct");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { id } = req.params;
 
-  const product = await Product.findOneAndDelete({codeOfGood: id});
+  const product = await Product.findOneAndDelete({ codeOfGood: id });
 
   if (!product) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
-  res.status(200).json({ id, message: "Delete successful" })
-
-}
+  res.status(200).json({ id, message: "Delete successful" });
+};
 
 const deleteZbirka = async (req, res) => {
-  console.log("deleteProduct")
+  console.log("deleteProduct");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const { id } = req.params;
 
-  const product = await ProductZbirky.findOneAndDelete({codeOfGood: id});
+  const product = await ProductZbirky.findOneAndDelete({ codeOfGood: id });
 
   if (!product) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
-  res.status(200).json({ id, message: "Delete successful" })
-
-}
+  res.status(200).json({ id, message: "Delete successful" });
+};
 
 const getFeedback = async (req, res) => {
-  console.log("getFeedback")
+  console.log("getFeedback");
 
-   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
-  const feedback = await FeedBack.find({}).sort({ createdAt: -1 })
-  
-  const result = feedback.map(i => {
+  const feedback = await FeedBack.find({}).sort({ createdAt: -1 });
+
+  const result = feedback.map((i) => {
     return {
       _id: i._id,
       numberOfApplication: i.numberOfOrder,
@@ -668,53 +683,62 @@ const getFeedback = async (req, res) => {
       tel: i.tel,
       comment: i.comment,
       createdAt: i.createdAt,
-      updatedAt: i.updatedAt
-    }
-  })
+      updatedAt: i.updatedAt,
+    };
+  });
 
   if (!feedback) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
+    throw HttpError(500, "Internal server eror, write code in DB");
   }
 
   res.status(200).json({
-         result  
+    result,
   });
-}
+};
 
 const updateOrderById = async (req, res) => {
-  
   const { token } = req.user;
-  
-  const admin = await Admin.findOne({ token })
-    
+
+  const admin = await Admin.findOne({ token });
+
   if (!admin) {
-    throw HttpError(404, 'Not Found');
+    throw HttpError(404, "Not Found");
   }
 
   const today = new Date(Date.now());
-  const day = (`0${today.getDate()}`).slice(-2)
-  const month = (`0${today.getMonth() + 1}`).slice(-2)
-  const todayDate = (day + '.' + month + '.' + today.getFullYear());
-  
+  const day = `0${today.getDate()}`.slice(-2);
+  const month = `0${today.getMonth() + 1}`.slice(-2);
+  const todayDate = day + "." + month + "." + today.getFullYear();
+
   const { status, cartItems, email } = req.body;
 
   if (status === "В роботі") {
-   
-
     for (const item of cartItems) {
-      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: item.quantity - item.quantityOrdered }, { new: true })
-      
+      const product = await Product.findOneAndUpdate(
+        { _id: item._id },
+        { quantity: item.quantity - item.quantityOrdered },
+        { new: true }
+      );
+
       if (!product) {
-        await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
+        await ProductZbirky.findOneAndUpdate(
+          { _id: item._id },
+          { quantity: item.quantity - item.quantityOrdered },
+          { new: true }
+        );
       }
     }
 
-    const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
-    
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id },
+      { ...req.body },
+      { new: true }
+    );
+
     if (!order) {
-      throw HttpError(500, 'Internal server eror, write code in DB');
+      throw HttpError(500, "Internal server eror, write code in DB");
     }
-    
+
     const textEmail = {
       from: MAIL_USER,
       to: email,
@@ -752,7 +776,9 @@ const updateOrderById = async (req, res) => {
       </caption>
       <tr>
         <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
-          <p style="margin: 0"><b>Номер замовлення: </b>${order.numberOfOrder}</p>
+          <p style="margin: 0"><b>Номер замовлення: </b>${
+            order.numberOfOrder
+          }</p>
           <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
           <p style="margin: 0">
             <b>Спосіб оплати: </b>${order.payment}
@@ -789,18 +815,20 @@ const updateOrderById = async (req, res) => {
       <tr>
         <td style="padding: 5px">
           <p style="margin: 0; padding: 15px 0">
-            <b>Отримувач</b><br />ФОП Занкевич Володимир Михайлович
+            <b>Отримувач</b><br />ФОП Солонинка Володимир Степанович
           </p>
           <p style="margin: 0">
-            <b>Рахунок отримувача</b><br />UA253808050000000260072159049
+            <b>Рахунок отримувача</b><br />UA393003350000000260092385042
           </p>
-          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3563508559</p>
+          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3599611856</p>
           <p style="margin: 0">
             <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
           </p>
           <p style="margin: 0; padding: 15px 0">
-            <b>Призначення платежу: </b>Оплата згідно рахунку №${order.numberOfOrder}
-            від ${day + '.' + month + '.' + today.getFullYear()}р.
+            <b>Призначення платежу: </b>Оплата згідно рахунку №${
+              order.numberOfOrder
+            }
+            від ${day + "." + month + "." + today.getFullYear()}р.
           </p>
         </td>
       </tr>
@@ -853,7 +881,9 @@ const updateOrderById = async (req, res) => {
         <th style="padding: 5px">Ціна</th>
         <th style="padding: 5px">Разом</th>
       </tr>
-      ${cartItems.map(item => `<tr style="text-align: center">
+      ${cartItems
+        .map(
+          (item) => `<tr style="text-align: center">
          <td style="text-align: left; padding: 5px">
            ${item.name}
          </td>
@@ -861,7 +891,9 @@ const updateOrderById = async (req, res) => {
          <td style="padding: 5px">${item.quantityOrdered}</td>
          <td style="padding: 5px">${item.price}<br /> грн</td>
          <td style="padding: 5px">${item.totalPrice}<br /> грн</td>
-       </tr>`).join(" ")}
+       </tr>`
+        )
+        .join(" ")}
       <tr style="text-align: center">
         <td colspan="4" style="padding: 5px">Разом</td>
         <td style="padding: 5px">
@@ -903,55 +935,65 @@ const updateOrderById = async (req, res) => {
     </p>
   </body>
 </html>`,
-      
     };
 
     await sendEmail(textEmail);
-    
+
     res.status(200).json({
-      result: order
+      result: order,
     });
   }
 
   if (status === "Скасовано") {
-    console.log("Скасовано")
+    console.log("Скасовано");
 
     const order = await Order.findOne({ _id: req.params.id });
     if (order.status === "В роботі") {
       for (const item of cartItems) {
-        const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
-      
+        const product = await Product.findOneAndUpdate(
+          { _id: item._id },
+          { quantity: item.quantity + item.quantityOrdered },
+          { new: true }
+        );
+
         if (!product) {
-          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+          await ProductZbirky.findOneAndUpdate(
+            { _id: item._id },
+            { quantity: item.quantity + item.quantityOrdered },
+            { new: true }
+          );
         }
       }
-      const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
-  
+      const order = await Order.findOneAndUpdate(
+        { _id: req.params.id },
+        { ...req.body },
+        { new: true }
+      );
+
       if (!order) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
+        throw HttpError(500, "Internal server eror, write code in DB");
       }
       res.status(200).json({
-        result: order
+        result: order,
       });
     }
   }
 
-  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
-  
-      if (!order) {
-        throw HttpError(500, 'Internal server eror, write code in DB');
-      }
-      res.status(200).json({
-        result: order
-      });
+  const order = await Order.findOneAndUpdate(
+    { _id: req.params.id },
+    { ...req.body },
+    { new: true }
+  );
+
+  if (!order) {
+    throw HttpError(500, "Internal server eror, write code in DB");
+  }
+  res.status(200).json({
+    result: order,
+  });
 };
 
-
-
-
-
 module.exports = {
-
   login: ctrlWrapper(login),
   logout: ctrlWrapper(logout),
   getCurrent: ctrlWrapper(getCurrent),
@@ -978,22 +1020,4 @@ module.exports = {
   deleteZbirka: ctrlWrapper(deleteZbirka),
   getFeedback: ctrlWrapper(getFeedback),
   updateOrderById: ctrlWrapper(updateOrderById),
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 };
