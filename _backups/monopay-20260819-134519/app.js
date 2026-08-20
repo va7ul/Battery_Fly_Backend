@@ -11,11 +11,10 @@ const print3dRouter = require('./routes/api/print3d')
 const feedBackRouter = require('./routes/api/feedBack')
 const heroRouter = require('./routes/api/hero')
 const adminRouter = require('./routes/api/admin')
-const monopayRouter = require('./routes/api/monopay')
 const app = express();
 
 app.use(cors());
-app.use(express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
+app.use(express.json());
 app.use(express.static('public'));
 
 app.use('/api/auth', authRouter);
@@ -26,7 +25,6 @@ app.use('/api/3dprint', print3dRouter)
 app.use('/api/feedback', feedBackRouter)
 app.use('/api/hero', heroRouter)
 app.use('/api/adm', adminRouter)
-app.use('/api/monopay', monopayRouter)
 
 
 
