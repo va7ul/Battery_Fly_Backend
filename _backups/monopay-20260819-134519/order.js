@@ -23,29 +23,8 @@ const addOrder = Joi.object({
     payment: Joi.string().required(),
   });
 
-// monobank "Покупка частинами": без payment (проставляється контролером) + payParts
-const createMonopayOrder = Joi.object({
-    userData: Joi.object({
-        firstName: Joi.string().required(),
-        lastName: Joi.string().required(),
-        email: Joi.string().pattern(emailRegexp).required(),
-        text: Joi.string().allow(""),
-        tel: Joi.string().pattern(/^\+380\d{9}$/).required(),}).required(),
-    total: Joi.number(),
-    promoCode: Joi.string().allow(""),
-    promoCodeDiscount: Joi.number().required(),
-    discountValue: Joi.number().required(),
-    together: Joi.number().required(),
-    cartItems: Joi.array().required(),
-    deliveryType: Joi.string().required(),
-    city: Joi.string().required(),
-    warehouse: Joi.string().required(),
-    payParts: Joi.number().integer().min(3).max(25).required(),
-  });
-
 const schemas = {
-    addOrder,
-    createMonopayOrder,
+    addOrder
 }
 
 const orderSchema = new Schema(
@@ -116,27 +95,6 @@ const orderSchema = new Schema(
         payment: {
             type: String,
             required: [true, 'Payment price is required']
-        },
-        monopayOrderId: {
-            type: String,
-            default: null,
-            index: true,
-        },
-        monopayState: {
-            type: String,
-            default: null,
-        },
-        monopaySubState: {
-            type: String,
-            default: null,
-        },
-        payParts: {
-            type: Number,
-            default: null,
-        },
-        isTest: {
-            type: Boolean,
-            default: false,
         },
 
     },
