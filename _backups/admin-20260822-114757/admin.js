@@ -317,7 +317,6 @@ const getOrders = async (req, res) => {
         
         const result = orders.map(order => {
         return {
-          _id: order._id,
           numberOfOrder: order.numberOfOrder,
           firstName: order.firstName,
           lastName: order.lastName,
@@ -334,10 +333,6 @@ const getOrders = async (req, res) => {
           city: order.city,
           warehouse: order.warehouse,
           payment: order.payment,
-          payParts: order.payParts,
-          monopayState: order.monopayState,
-          monopaySubState: order.monopaySubState,
-          monopayOrderId: order.monopayOrderId,
           createdAt: order.createdAt,
           status: order.status,
         };
@@ -912,8 +907,8 @@ const updateOrderById = async (req, res) => {
     };
 
     await sendEmail(textEmail);
-
-    return res.status(200).json({
+    
+    res.status(200).json({
       result: order
     });
   }
@@ -935,7 +930,7 @@ const updateOrderById = async (req, res) => {
       if (!order) {
         throw HttpError(500, 'Internal server eror, write code in DB');
       }
-      return res.status(200).json({
+      res.status(200).json({
         result: order
       });
     }
