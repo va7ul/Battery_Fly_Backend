@@ -145,13 +145,6 @@ const confirmMonopayOrder = async (req, res) => {
         throw HttpError(502, 'Monobank confirm request failed');
     }
 
-    const { state, order_sub_state } = monobankResponse.data;
-    await Order.findOneAndUpdate(
-        { numberOfOrder: req.params.id },
-        { monopayState: state, monopaySubState: order_sub_state },
-        { new: true }
-    );
-
     res.status(200).json({ result: monobankResponse.data });
 };
 
@@ -165,13 +158,6 @@ const rejectMonopayOrder = async (req, res) => {
         logMonopayError('reject', error);
         throw HttpError(502, 'Monobank reject request failed');
     }
-
-    const { state, order_sub_state } = monobankResponse.data;
-    await Order.findOneAndUpdate(
-        { numberOfOrder: req.params.id },
-        { monopayState: state, monopaySubState: order_sub_state },
-        { new: true }
-    );
 
     res.status(200).json({ result: monobankResponse.data });
 };
