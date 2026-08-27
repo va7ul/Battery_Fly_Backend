@@ -80,15 +80,6 @@ function buildOrderIdPayload(orderId) {
   return { order_id: orderId };
 }
 
-function buildReturnPayload({ orderId, sum, storeReturnId, returnMoneyToCard }) {
-  return {
-    order_id: orderId,
-    sum,
-    store_return_id: storeReturnId,
-    return_money_to_card: returnMoneyToCard,
-  };
-}
-
 module.exports = {
   monopayClient,
   signBody,
@@ -96,5 +87,4 @@ module.exports = {
   monopayPost,
   buildCreatePayload,
   buildOrderIdPayload,
-  buildReturnPayload,
 };

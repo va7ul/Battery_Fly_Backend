@@ -11,6 +11,5 @@ router.post('/state/:id', authAdm, ctrl.getMonopayState);
 router.post('/confirm/:id', authAdm, ctrl.confirmMonopayOrder);
 router.post('/reject/:id', authAdm, ctrl.rejectMonopayOrder);
 router.post('/resend/:id', authAdm, ctrl.resendMonopayOrder);
-router.post('/return/:id', authAdm, ctrl.returnMonopayOrder);
 
 module.exports = router;
