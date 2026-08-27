@@ -1,5 +1,5 @@
 const { ctrlWrapper, HttpError } = require('../helpers');
-const { monopayPost, buildCreatePayload, buildOrderIdPayload, buildReturnPayload, verifyCallbackSignature } = require('../helpers/monopay');
+const { monopayPost, buildCreatePayload, buildOrderIdPayload, verifyCallbackSignature } = require('../helpers/monopay');
 const { Order } = require('../models/order');
 const { NumberOfOrders } = require('../models/numberOfOrders');
 
@@ -250,88 +250,6 @@ const resendMonopayOrder = async (req, res) => {
     });
 };
 
-// Викликає monobank state і синхронізує monopayState/monopaySubState в Order.
-// Локальний хелпер лише для returnMonopayOrder — існуючий getMonopayState (роут)
-// не займаємо, щоб не ризикувати регресом.
-async function checkAndSyncMonopayState(order, context) {
-    let stateResponse;
-    try {
-        stateResponse = await monopayPost('/api/order/state', buildOrderIdPayload(order.monopayOrderId));
-    } catch (error) {
-        logMonopayError(context, error);
-        throw HttpError(502, 'Monobank state request failed');
-    }
-
-    const { state, order_sub_state } = stateResponse.data;
-
-    order.monopayState = state;
-    order.monopaySubState = order_sub_state;
-    await order.save();
-
-    return { state, order_sub_state };
-}
-
-const returnMonopayOrder = async (req, res) => {
-    const order = await Order.findOne({ numberOfOrder: req.params.id });
-
-    if (!order || order.payment !== 'monopay_parts') {
-        throw HttpError(404, 'Monopay order not found');
-    }
-
-    const sum = Number(req.body.sum);
-    const returnMoneyToCard = req.body.return_money_to_card === undefined
-        ? true
-        : Boolean(req.body.return_money_to_card);
-
-    if (!Number.isFinite(sum) || sum < 1) {
-        throw HttpError(400, 'sum must be a number >= 1');
-    }
-
-    const remaining = order.together - order.monopayReturnedSum;
-    if (sum > remaining) {
-        throw HttpError(400, `sum exceeds remaining refundable amount (${remaining})`);
-    }
-
-    const { state } = await checkAndSyncMonopayState(order, 'return-state-check');
-
-    if (state !== 'SUCCESS') {
-        throw HttpError(409, 'Повернення доступне лише для активної розстрочки');
-    }
-
-    const storeReturnId = `${order.numberOfOrder}-R${Date.now()}`;
-
-    let monobankResponse;
-    try {
-        monobankResponse = await monopayPost('/api/order/return', buildReturnPayload({
-            orderId: order.monopayOrderId,
-            sum,
-            storeReturnId,
-            returnMoneyToCard,
-        }));
-    } catch (error) {
-        logMonopayError('return', error);
-        throw HttpError(502, 'Monobank return request failed');
-    }
-
-    order.monopayReturnedSum += sum;
-    order.monopayReturns.push({
-        store_return_id: storeReturnId,
-        sum,
-        date: new Date(),
-        return_money_to_card: returnMoneyToCard,
-    });
-    await order.save();
-
-    const { state: newState, order_sub_state: newSubState } = await checkAndSyncMonopayState(order, 'return-state-refresh');
-
-    res.status(200).json({
-        ok: true,
-        returnedSum: order.monopayReturnedSum,
-        state: newState,
-        subState: newSubState,
-    });
-};
-
 module.exports = {
     createMonopayOrder: ctrlWrapper(createMonopayOrder),
     monopayCallback: ctrlWrapper(monopayCallback),
@@ -339,5 +257,4 @@ module.exports = {
     confirmMonopayOrder: ctrlWrapper(confirmMonopayOrder),
     rejectMonopayOrder: ctrlWrapper(rejectMonopayOrder),
     resendMonopayOrder: ctrlWrapper(resendMonopayOrder),
-    returnMonopayOrder: ctrlWrapper(returnMonopayOrder),
 };

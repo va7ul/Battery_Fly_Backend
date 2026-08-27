@@ -138,19 +138,6 @@ const orderSchema = new Schema(
             type: Boolean,
             default: false,
         },
-        monopayReturnedSum: {
-            type: Number,
-            default: 0,
-        },
-        monopayReturns: {
-            type: [{
-                store_return_id: String,
-                sum: Number,
-                date: Date,
-                return_money_to_card: Boolean,
-            }],
-            default: [],
-        },
 
     },
     { versionKey: false, timestamps: true }
