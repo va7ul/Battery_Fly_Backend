@@ -12,7 +12,6 @@ const feedBackRouter = require('./routes/api/feedBack')
 const heroRouter = require('./routes/api/hero')
 const adminRouter = require('./routes/api/admin')
 const monopayRouter = require('./routes/api/monopay')
-const acquiringRouter = require('./routes/api/acquiring')
 const app = express();
 
 app.use(cors());
@@ -28,7 +27,6 @@ app.use('/api/feedback', feedBackRouter)
 app.use('/api/hero', heroRouter)
 app.use('/api/adm', adminRouter)
 app.use('/api/monopay', monopayRouter)
-app.use('/api/acquiring', acquiringRouter)
 
 
 

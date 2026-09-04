@@ -43,31 +43,9 @@ const createMonopayOrder = Joi.object({
     payParts: Joi.number().integer().min(3).max(25).required(),
   });
 
-// monobank онлайн-еквайринг: та сама форма, що addOrder, але без payment
-// (контролер проставляє 'card_online'). Телефон — як в addOrder, без строгого
-// патерну з monopay: карткова оплата client_phone у monobank не використовує.
-const createAcquiring = Joi.object({
-    userData: Joi.object({
-        firstName: Joi.string().required(),
-        lastName: Joi.string().required(),
-        email: Joi.string().pattern(emailRegexp).required(),
-        text: Joi.string().allow(""),
-        tel: Joi.string().required(),}).required(),
-    total: Joi.number(),
-    promoCode: Joi.string().allow(""),
-    promoCodeDiscount: Joi.number().required(),
-    discountValue: Joi.number().required(),
-    together: Joi.number().required(),
-    cartItems: Joi.array().required(),
-    deliveryType: Joi.string().required(),
-    city: Joi.string().required(),
-    warehouse: Joi.string().required(),
-  });
-
 const schemas = {
     addOrder,
     createMonopayOrder,
-    createAcquiring,
 }
 
 const orderSchema = new Schema(
@@ -172,27 +150,6 @@ const orderSchema = new Schema(
                 return_money_to_card: Boolean,
             }],
             default: [],
-        },
-        acquiringInvoiceId: {
-            type: String,
-            default: null,
-            index: true,
-        },
-        acquiringStatus: {
-            type: String,
-            default: null,
-        },
-        acquiringPageUrl: {
-            type: String,
-            default: null,
-        },
-        acquiringFailureReason: {
-            type: String,
-            default: null,
-        },
-        acquiringModifiedDate: {
-            type: String,
-            default: null,
         },
 
     },
