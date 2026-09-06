@@ -1,7 +1,11 @@
 # PROJECT_CONTEXT.md — Battery Fly Backend
 
-> Onboarding-довідка для нової сесії Claude Code. Актуально станом на момент створення файлу
-> (гілки `feature/monopay-return` / `master` — ідентичні за вмістом, всі monopay-PR змерджені).
+> Onboarding-довідка для нової сесії Claude Code.
+> **Оновлено 2026-09-07** — дописано онлайн-еквайринг (розділ 5.2), якого не було в першій
+> редакції файлу від 2026-09-04 (там він значився як «не почато» — це вже неправда),
+> і статуси оплати + повторну оплату (гілка `feat/acquiring-status-retry`).
+> Актуальний стан гілок: `master` == `origin/master` == `caced4b` (PR #133, еквайринг змерджено);
+> локальна `feature/acquiring` відстає рівно на цей merge-коміт, свого коду в ній більше немає.
 > Значення `.env` тут ніде не наводяться — лише назви змінних.
 
 ## 1. Огляд
@@ -52,7 +56,7 @@ _backups/<feature>-<timestamp>/  — знімки файлів ПЕРЕД пра
 | `together` | Number | required | **фінальна сума до сплати** — саме це поле йде в monobank як `total_sum` |
 | `cartItems` | Array | required | **без вкладеної Joi/Mongoose-схеми** — див. розділ 7 |
 | `deliveryType`, `city`, `warehouse` | String | required | Нова Пошта / самовивіз |
-| `payment` | String | required | вільний рядок без enum: спостережені значення `'card'` (задає фронтенд), `'monopay_parts'` (проставляє бек) |
+| `payment` | String | required | вільний рядок без enum: спостережені значення `'card'` та інші людські підписи способів оплати (задає фронтенд), `'monopay_parts'` і `'card_online'` (проставляє бек у своїх контролерах) |
 | `monopayOrderId` | String | default `null`, indexed | ID заявки на боці monobank (ПЧ) |
 | `monopayState` / `monopaySubState` | String | default `null` | останній синхронізований стан ПЧ (SUCCESS/IN_PROCESS/FAIL + підстан) |
 | `payParts` | Number | default `null` | кількість платежів ПЧ (3–25) |
@@ -60,13 +64,24 @@ _backups/<feature>-<timestamp>/  — знімки файлів ПЕРЕД пра
 | `monopayReturnedSum` | Number | default `0` | скільки вже повернено клієнту (ПЧ) |
 | `monopayReturns` | Array<Object> | default `[]` | історія повернень: `{store_return_id, sum, date, return_money_to_card}` |
 
-**Полів під онлайн-еквайринг ще немає.** Коли будете додавати — за аналогією з ПЧ: nullable-поля
-з власним префіксом (напр. `acquiringInvoiceId`, `acquiringStatus`), у той самий плоский
-`orderSchema`, без нової колекції.
+**Поля онлайн-еквайрингу** (додані в тому ж плоскому `orderSchema`, за тим самим принципом, що
+й monopay — nullable з власним префіксом, без нової колекції):
 
-Joi-схеми в цьому ж файлі: `schemas.addOrder` (звичайне замовлення) і `schemas.createMonopayOrder`
+| Поле | Тип | Required / Default | Нотатка |
+|---|---|---|---|
+| `acquiringInvoiceId` | String | default `null`, indexed | ID рахунку в monobank; головний ключ пошуку у вебхуку |
+| `acquiringStatus` | String | default `null` | статус оплати з monobank, зберігається **як є** (`created` ставить сам контролер при створенні) |
+| `acquiringPageUrl` | String | default `null` | посилання на сторінку оплати monobank — те саме, що віддається фронту у відповіді на `create` |
+| `acquiringFailureReason` | String | default `null` | `errCode: failureReason`, склеєні через `: ` (порожнє → `null`) |
+| `acquiringModifiedDate` | String | default `null` | час останньої зміни на боці monobank; **зберігається рядком**, використовується для відсіву застарілих вебхуків |
+| `acquiringPublicRef` | String | default `null`, indexed | випадковий 32-hex токен у `redirectUrl` (`?ref=…`); за ним публічний роут статусу знаходить замовлення. Належить **замовленню**, не рахунку — переживає повторну оплату |
+| `acquiringInvoiceCreatedAt` | Date | default `null` | коли створено **поточний** рахунок; окремо від `createdAt` замовлення, бо після `resend` рахунок новий, а 24-годинне вікно життя посилання рахується від рахунку |
+
+Joi-схеми в цьому ж файлі: `schemas.addOrder` (звичайне замовлення), `schemas.createMonopayOrder`
 (ПЧ, той самий набір полів мінус `payment` плюс `payParts`, телефон валідується строгіше —
-`/^\+380\d{9}$/`, бо йде напряму в monobank `client_phone`).
+`/^\+380\d{9}$/`, бо йде напряму в monobank `client_phone`) і `schemas.createAcquiring`
+(еквайринг — форма `addOrder` мінус `payment`, телефон **без** строгого патерну: карткова оплата
+`client_phone` у monobank не використовує).
 
 ## 4. API-роути
 
@@ -120,9 +135,14 @@ Middleware-скорочення: **auth** = клієнтський JWT (`middlew
 | | POST `/reject/:id` | authAdm | відмовити у видачі |
 | | POST `/resend/:id` | authAdm | повторний create після FAIL (той самий `store_order_id`) |
 | | POST `/return/:id` | authAdm | повернення коштів за активною ПЧ (повне/часткове) |
+| `/api/acquiring` | POST `/create` | validateBody(createAcquiring) | створити рахунок monobank + Order (`payment: 'card_online'`); відповідь `{orderNum, pageUrl}` |
+| | POST `/webhook` | — (ECDSA-перевірка `X-Sign` у тілі функції) | вебхук monobank про зміну статусу оплати |
+| | POST `/public-status` | validateBody(publicAcquiringStatus) | **публічний** статус оплати для сторінки `/payment/result`: тіло `{ref}` або `{invoiceId}`, у відповіді лише платіжні поля |
+| | GET `/status/:id` | authAdm | ручний запит статусу рахунку в monobank + синхронізація в базу |
+| | POST `/resend/:id` | authAdm | повторна оплата: віддає живе посилання або створює новий рахунок на те саме замовлення |
 
-Усюди `:id` для `/api/monopay/*` і GET-роутів адмінки — це `numberOfOrder`, окрім `put-order/:id`,
-де це Mongo `_id`.
+Усюди `:id` для `/api/monopay/*`, `/api/acquiring/status/:id`, `/api/acquiring/resend/:id` і
+GET-роутів адмінки — це `numberOfOrder`, окрім `put-order/:id`, де це Mongo `_id`.
 
 ## 5. Інтеграції monobank
 
@@ -135,19 +155,116 @@ Middleware-скорочення: **auth** = клієнтський JWT (`middlew
 - **`routes/api/monopay.js`** — див. таблицю вище.
 - **Статус:** усі 7 ендпоінтів у `master` (PR #128–#132), пройшли перевірку на сендбоксі monobank (`test_store_with_confirm`), включно з тестовими номерами `...1..4` і симуляцією підписаного callback.
 
-### 5.2. Онлайн-еквайринг (`invoice/create`) — **не почато**
+### 5.2. Онлайн-еквайринг (`acquiring` / `card_online`) — **у `master`, задеплоєно на Render**
 
-У коді немає жодного окремого клієнта, роута чи поля під acquiring/invoice — лише «Покупка
-частинами». Що вже готове й перевикористовне з розділу 5.1:
-- патерн окремого axios-клієнта (не займати глобальний `axios.defaults`, див. розділ 7);
-- патерн HMAC-підпису точного рядка тіла (`signBody`/`monopayPost`);
-- `req.rawBody` вже глобально доступний для перевірки підпису нового вебхука;
-- вільне поле `payment` без enum — новий спосіб оплати це просто ще одне значення рядка;
-- спільний лічильник `NumberOfOrders`.
+**Статус на 2026-09-07: у проді.** Код змерджено в `master` (PR #133, merge-коміт `caced4b`),
+Render деплоїть з `master` автоматично. Перевірено наживо: `GET /api/acquiring/status/1` без
+токена віддає `401 {"message":"Not authorized"}` (а не `404 Not found`) — роутер змонтований.
+⚠️ Працює на **тестовому** `ACQUIRING_TOKEN`, бойові ключі ще не підставлені (розділ 8).
 
-Чого немає й треба будувати з нуля: власний вебхук-контролер (формат тіла в еквайринга інший, ніж
-`{order_id, state, order_sub_state}` у ПЧ), нові nullable-поля в Order, нова Joi-схема створення,
-новий роутер або розширення `routes/api/monopay.js`.
+Файли: `helpers/acquiring.js`, `controllers/acquiring.js`, `routes/api/acquiring.js`, 5 нових
+полів у `models/order.js`, Joi-схема `schemas.createAcquiring`, монтування в `app.js`.
+Бекап перед правками — `_backups/acquiring-20260904-184201/`.
+
+**Головна відмінність від ПЧ: підпису вихідних запитів немає.** Автентифікація — заголовок
+`X-Token`, тому тіло віддається axios **об'єктом**, без ручного `JSON.stringify` (на відміну від
+`monopayPost`, де підпис рахується від точного рядка тіла). ECDSA-підпис тут потрібен лише для
+перевірки **вхідних** вебхуків. Не переносити HMAC-звички з 5.1 сюди й навпаки.
+
+#### `helpers/acquiring.js`
+
+- `acquiringClient = axios.create({ baseURL: process.env.ACQUIRING_BASE_URL })` — окремий інстанс
+  (глобальний `axios.defaults.baseURL` зайнятий Новою Поштою, див. розділ 7);
+- `acquiringPost` / `acquiringGet` — єдині точки виходу, обидві з `X-Token`;
+- `toMinor()` — гривні → копійки, `NaN` для нечислового (щоб виклик міг це відсіяти);
+- `buildBasketOrder(cartItems)` — проєкція кошика у формат monobank
+  `{name, qty, sum, total, code, unit}`, де `sum` — ціна за **одиницю** в копійках, `total` — за
+  всю кількість. Читає `item.name / quantityOrdered / price / totalPrice / codeOfGood || _id`.
+  **Це лише читання** — сам масив `cartItems` зберігається в базі байт-у-байт як прийшов з фронта.
+  Якщо хоч одна позиція неповна — повертає `null`, і `basketOrder` просто не відправляється
+  (краще втратити красивий кошик на сторінці оплати, ніж зламати клієнту оплату);
+- `buildInvoicePayload()` — `amount` рахується з `together` (сума **після** знижки, бо саме її
+  платить клієнт). `basketOrder` дає суму **до** знижки, тому знижка йде окремо в
+  `merchantPaymInfo.discounts`, і перед відправкою звіряється тотожність
+  `basketTotal - discount === amount`; не зійшлося — `basketOrder` і `discounts` не додаються
+  взагалі (лишається чистий `amount`), у консоль іде `console.warn`.
+  ⚠️ `discounts[].value` — у **гривнях** (`multipleOf 0.01`), на відміну від
+  `sum`/`total`/`amount` у копійках. Поле йде на фіскалізацію (checkbox/ПРРО) і **ще не
+  перевірене наживо** замовленням з промокодом;
+- `getMerchantPubKey(forceRefresh)` — ключ з `GET /api/merchant/pubkey` кешується в пам'яті
+  процесу (ротується на боці банку). Примусовий refresh тротлиться 60 с: інакше потік вебхуків
+  з навмисно невалідним підписом перетворився б на потік запитів до monobank (429);
+- `verifyWebhookSignature(rawBody, xSign, pubKeyBase64)` — ECDSA/SHA256 над `req.rawBody`
+  (`X-Sign` — base64 DER-підпису, ключ — base64 PEM), як у прикладі з офіційної специфікації.
+
+#### `controllers/acquiring.js` — 3 функції
+
+| Функція | Що робить |
+|---|---|
+| `createAcquiringOrder` | інкремент `NumberOfOrders` → `Order.create({..., payment: 'card_online', acquiringStatus: 'created'})` → `POST /api/merchant/invoice/create` → записує `acquiringInvoiceId` + `acquiringPageUrl` → пише промокод/номер у профіль клієнта → лист «замовлення прийнято, очікуємо оплату» → відповідь `{orderNum, pageUrl}` |
+| `acquiringWebhook` | перевірка `X-Sign` (одна повторна спроба зі свіжим pubkey) → пошук замовлення за `acquiringInvoiceId`, фолбек за `reference` (= `numberOfOrder`) → відсів застарілих вебхуків за `modifiedDate` → оновлює `acquiringStatus` / `acquiringModifiedDate` / `acquiringFailureReason` |
+| `getAcquiringStatus` | `authAdm`; `GET /api/merchant/invoice/status?invoiceId=…` → перезаписує ті самі поля **без** звірки `modifiedDate` (прямий запит авторитетніший за вебхук) → віддає `{orderNum, status, modifiedDate, failureReason, amount, finalAmount}` |
+| `getPublicAcquiringStatus` | **без авторизації**; шукає замовлення за `acquiringPublicRef` або `acquiringInvoiceId`; якщо статус не фінальний — тягне свіжий з monobank (тротлінг 2 с); віддає `{orderNum, status, failureReason, together, pageUrl}` |
+| `resendAcquiringOrder` | `authAdm`; звіряє статус → відмовляє при `success`/`hold`/`reversed` → віддає той самий `pageUrl`, якщо рахунок живий, інакше створює новий рахунок і оновлює поля; віддає `{orderNum, status, pageUrl, invoiceId, reused}` |
+
+Свідомі рішення в контролері (неочевидні з коду):
+
+- **Робочий `status` замовлення вебхук не чіпає.** Оплата й логістика — дві незалежні осі:
+  `status` (`Нове`/`В роботі`/…) лишається за менеджером через `PUT /api/adm/put-order/:id`.
+- **Order створюється ДО рахунку.** Якщо monobank не відповість — у базі лишиться замовлення з
+  `acquiringStatus: 'created'` і **без** `acquiringInvoiceId`, а клієнт отримає `502`. Такі
+  «осиротілі» замовлення — очікувана поведінка, не баг: номер уже витрачено, менеджер бачить
+  замовлення і може зв'язатись.
+- **Вебхук завжди відповідає `200`** — і коли замовлення не знайдено, і коли вебхук застарілий.
+  Інакше monobank повторюватиме доставку.
+- **Порядок вебхуків не гарантований** — актуальним вважається той, у кого `modifiedDate`
+  більший; менший або рівний ігнорується.
+- **Гість не валить запит.** `User.findOne({email})` обгорнутий `if (user)` — на відміну від
+  `addOrder`, де замовлення без зареєстрованого користувача падає.
+- **Лист не блокує видачу `pageUrl`** — рахунок уже створено, збій пошти лише логується.
+- URL-и будуються з env: `redirectUrl = ${FRONTEND_URL}/payment/result?order=${numberOfOrder}`,
+  `webHookUrl = ${PUBLIC_URL}/api/acquiring/webhook`.
+
+#### Публічний статус і повторна оплата (гілка `feat/acquiring-status-retry`)
+
+**Чому в `redirectUrl` не `invoiceId`.** Планувалось передавати саме його (номер замовлення
+послідовний — `100201`, `100202`… — і чужий статус діставався б перебором). Але `redirectUrl`
+їде **всередині** запиту `invoice/create`, а `invoiceId` приходить лише у **відповіді** на
+нього; своїх параметрів monobank до `redirectUrl` не додає. Тому бек генерує власний
+32-hex токен (`crypto.randomBytes(16)`) **до** створення рахунку, кладе його в
+`acquiringPublicRef` і в `redirectUrl`. Невгадуваність та сама. Публічний роут приймає
+**і** `ref`, **і** `invoiceId`; `numberOfOrder` не приймає свідомо.
+
+**Що віддає публічний роут:** тільки `orderNum`, `status`, `failureReason`, `together` і
+`pageUrl`. ⚠️ Ні `cartItems`, ні імені, ні телефону, ні email — роут відкритий, посилання
+може відкрити будь-хто, кому воно потрапило.
+
+**`pageUrl` для повтору віддається лише при `status === 'failure'`** і поки рахунок живий
+(24 год від `acquiringInvoiceCreatedAt`). У `created`/`processing` повторювати нічого,
+а `success`/`reversed`/`expired` — стани, де повтор зайвий або неможливий.
+
+**`failure` свідомо НЕ вважається фінальним статусом** (`isFinalStatus`): клієнт може
+оплатити ще раз тим самим рахунком, і статус зміниться на `success`.
+
+**Про `expired` вебхук не приходить взагалі** (дока: вебхуки шлються «окрім статусу
+expired»). Тому публічний роут при нефінальному статусі сам питає monobank, а не чекає
+вебхука — інакше протермінований рахунок назавжди лишався б у `created`.
+
+**Захист від вебхука старого рахунку.** Після `resend` у замовлення новий `invoiceId`, але
+вебхук від попереднього рахунку ще може долетіти і знайти замовлення за `reference`
+(= `numberOfOrder`). Такий вебхук тепер ігнорується з логом: приймаються лише ті, чий
+`invoiceId` збігається з поточним.
+
+**Guard від подвійної оплати.** `resend` спершу звіряє реальний статус у monobank і
+відмовляє (`409`) при `success`, `hold` і `reversed` — щоб менеджер не видав посилання на
+вже оплачене замовлення.
+
+#### Статуси оплати
+
+Бек зберігає `status` з monobank **як є, без власного маппінгу** — ні enum, ні переліку в коді
+немає, мапити в людські підписи має UI. За докою monobank набір такий: `created`, `processing`,
+`hold`, `success`, `failure`, `reversed`, `expired` (⚠️ перед побудовою UI звірити з актуальною
+специфікацією — у коді цей список не зафіксований).
 
 ⚠️ **Пастка з документацією monobank:** повна схема тіла запиту `POST /api/order/create` для ПЧ
 рендериться клієнтським JS (Redoc-подібна сторінка) — простий `curl`/fetch показує лише спрощений
@@ -173,8 +290,14 @@ HTTP-фетч.
 **monobank / Покупка частинами:**
 `MONOPAY_BASE_URL`, `MONOPAY_STORE_ID`, `MONOPAY_SECRET`, `PUBLIC_URL` (база для `result_callback`)
 
-⚠️ `.env.example` **застарілий** — містить лише перший блок (DB_HOST…CLOUD_API_SECRET), чотирьох
-monopay-змінних там немає. Варто оновити при наступній нагоді.
+**monobank / Онлайн-еквайринг:**
+`ACQUIRING_BASE_URL`, `ACQUIRING_TOKEN` (значення заголовка `X-Token`),
+`PUBLIC_URL` (база для `webHookUrl`), `FRONTEND_URL` (база для `redirectUrl` — сторінка
+`/payment/result` на клієнтському сайті)
+
+⚠️ `.env.example` **частково оновлений**: при роботі над еквайрингом туди додали `PUBLIC_URL`,
+`FRONTEND_URL`, `ACQUIRING_BASE_URL`, `ACQUIRING_TOKEN`, але **трьох monopay-змінних там досі
+немає** — `MONOPAY_BASE_URL`, `MONOPAY_STORE_ID`, `MONOPAY_SECRET`. Варто дописати при нагоді.
 
 ## 7. Важливі рішення й нюанси (неочевидне з коду)
 
@@ -207,7 +330,12 @@ monopay-змінних там немає. Варто оновити при на�
   відповідь через `.map()` з явним переліком полів — нові поля Order (в т.ч. `monopayReturnedSum`,
   `monopayReturns`, `isTest`) **не** з'являються в списку автоматично, поки їх туди не додати
   вручну. Зараз у whitelist є: `_id, numberOfOrder, ..., payParts, monopayState, monopaySubState,
-  monopayOrderId, createdAt, status` — повернень (5.1 return) там ще нема.
+  monopayOrderId, createdAt, status` — повернень (5.1 return) там ще нема, **і жодного
+  acquiring-поля теж**: `acquiringStatus`, `acquiringPageUrl`, `acquiringInvoiceId`,
+  `acquiringFailureReason`, `acquiringModifiedDate` — **виправлено** в
+  `feat/acquiring-status-retry`: усі пʼять полів додані у whitelist. `acquiringPublicRef`
+  свідомо **не** доданий — адмінці він не потрібен, а це фактично ключ доступу до статусу.
+  `get-order/:id` натомість віддає документ **цілком** (`Order.findOne(...)` без проєкції).
 - **`put-order/:id` шукає за `_id`, решта admin GET-роутів — за `numberOfOrder`.** Свідомо різні
   ключі: мутуючі дії — по Mongo `_id`, читання списком/по одному — по публічному номеру.
 - **Сендбокс monobank — не 1:1 з продом.** Канонічні тестові номери телефону (`...1`, `...2`,
@@ -225,13 +353,37 @@ monopay-змінних там немає. Варто оновити при на�
   Бек лише порівнює `=== 'monopay_parts'` у кількох місцях (`return`, і неявно через
   `findMonopayOrder`, який перевіряє `monopayOrderId`, не сам `payment`). Новий спосіб оплати не
   вимагає міграції схеми — просто нове значення рядка.
+- **Два різні механізми підпису — не плутати.** ПЧ: HMAC-SHA256 на **вихідних** запитах
+  (підписується точний рядок тіла) + перевірка вхідного callback. Еквайринг: **жодного підпису
+  на вихідних** (лише `X-Token`), ECDSA/SHA256 — лише на **вхідному** вебхуку. Обидва вхідні
+  механізми читають `req.rawBody`.
+- **`acquiringModifiedDate` зберігається рядком, не датою.** Порівняння йде через
+  `new Date(...).getTime()` у момент обробки. Якщо колись міняти тип — переписати і відсів
+  застарілих вебхуків.
+- **Ідемпотентності `create` немає.** Кожен `POST /api/acquiring/create` витрачає новий
+  `numberOfOrder` і створює новий рахунок. Для сценарію «повторна оплата» це означає, що
+  наївний повторний виклик `create` наплодить дублі замовлень — потрібен окремий шлях
+  (перевикористання `acquiringPageUrl` або новий рахунок на існуючий `numberOfOrder`).
 - **`_backups/` — навмисна конвенція, не сміття.** Кожна сесія редагування коду в цьому репо
   створює `_backups/<фіча>-<таймстемп>/` зі знімком файлів до правок і комітить їх разом з кодом.
 
 ## 8. Що в процесі / TODO
 
-- [ ] Онлайн-еквайринг monobank (`invoice/create`) — **не починали**, лише розвідка архітектури
-      (окрема довідка робилась для консультанта, у репо не збережена).
+- [x] Онлайн-еквайринг monobank (`invoice/create` + вебхук + status) — **зроблено й змерджено
+      в `master`** (PR #133), працює в проді на тестовому токені. Деталі — розділ 5.2.
+- [ ] **Бойові ключі еквайрингу** (`ACQUIRING_TOKEN` / `ACQUIRING_BASE_URL` прод) — не підставлені.
+- [x] **`get-orders` віддає acquiring-поля** — зроблено в `feat/acquiring-status-retry`.
+- [x] **Публічний ендпоінт статусу оплати** — `POST /api/acquiring/public-status`.
+- [x] **Повторна оплата** — `POST /api/acquiring/resend/:id` (адмінка) + `pageUrl` у публічному
+      статусі (клієнт).
+- [ ] ⚠️ **Не перевірено наживо:** чи справді monobank дозволяє повторну оплату тим самим
+      `pageUrl` після `failure`. Логіка написана за ТЗ і докою (рахунок живе 24 год), але
+      сценарій «невдала оплата → повтор за тим самим посиланням» на пісочниці не програвався.
+- [ ] `validity` у `invoice/create` не передається — діє дефолт monobank (24 год), і саме на
+      нього спирається `isInvoiceStillValid`. Якщо колись задавати `validity` явно — синхронізувати
+      з константою `INVOICE_VALIDITY_MS`.
+- [ ] **`merchantPaymInfo.discounts` не перевірений наживо** — потрібне тестове замовлення з
+      промокодом на пісочниці (фіскалізація checkbox/ПРРО).
 - [ ] UI/адмінка для `resend`/`return` — ТЗ на `return` явно ділилось на «Частина 1 (бек)» і
       «Частина 2 (адмінка)»; зроблено лише бек. Кнопка «Оформити повернення», модалка суми/способу,
       бейджі статусів — не реалізовано.

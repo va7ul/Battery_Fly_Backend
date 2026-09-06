@@ -64,20 +64,10 @@ const createAcquiring = Joi.object({
     warehouse: Joi.string().required(),
   });
 
-// Публічний (без авторизації) запит статусу оплати зі сторінки /payment/result.
-// Приймає АБО ref (випадковий токен з redirectUrl), АБО invoiceId — обидва
-// невгадувані, тож перебором чужий статус не дістати. numberOfOrder свідомо
-// НЕ приймається: він послідовний (100201, 100202…) і перебирається тривіально.
-const publicAcquiringStatus = Joi.object({
-    ref: Joi.string().hex().length(32),
-    invoiceId: Joi.string().max(200),
-  }).or('ref', 'invoiceId');
-
 const schemas = {
     addOrder,
     createMonopayOrder,
     createAcquiring,
-    publicAcquiringStatus,
 }
 
 const orderSchema = new Schema(
@@ -188,20 +178,6 @@ const orderSchema = new Schema(
             default: null,
             index: true,
         },
-        // Випадковий 32-hex токен, який їде в redirectUrl (?ref=…) і за яким
-        // клієнтська сторінка результату питає статус оплати.
-        // Чому не invoiceId, як планувалось: redirectUrl передається ВСЕРЕДИНІ
-        // запиту invoice/create, а invoiceId приходить лише у ВІДПОВІДІ на
-        // нього — підставити його в URL фізично неможливо, а своїх параметрів
-        // monobank до redirectUrl не додає. Токен дає ту саму невгадуваність.
-        // Належить ЗАМОВЛЕННЮ, не інвойсу: при повторній оплаті (resend)
-        // створюється новий invoiceId, а ref лишається той самий, тож старе
-        // посилання на /payment/result продовжує працювати.
-        acquiringPublicRef: {
-            type: String,
-            default: null,
-            index: true,
-        },
         acquiringStatus: {
             type: String,
             default: null,
@@ -216,13 +192,6 @@ const orderSchema = new Schema(
         },
         acquiringModifiedDate: {
             type: String,
-            default: null,
-        },
-        // Коли створено ПОТОЧНИЙ рахунок. Не дублює createdAt замовлення:
-        // після повторної оплати (resend) рахунок новий, а замовлення те саме,
-        // і 24-годинне вікно життя посилання треба рахувати від рахунку.
-        acquiringInvoiceCreatedAt: {
-            type: Date,
             default: null,
         },
 
