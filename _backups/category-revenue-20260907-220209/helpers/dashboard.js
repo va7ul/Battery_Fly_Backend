@@ -195,21 +195,17 @@ const CUSTOMER_KEY = {
 // поклало б увесь дашборд, а не одну позицію.
 const toNumber = value => ({ $convert: { input: value, to: 'double', onError: 0, onNull: 0 } });
 
-// Шлях передається параметром, бо та сама сума потрібна двічі: для позиції
-// після $unwind ('$cartItems') і для кожного елемента всередині $map ('$$item').
-const itemSum = path => ({
+const ITEM_SUM = {
   $let: {
     vars: {
-      total: toNumber(`${path}.totalPrice`),
+      total: toNumber('$cartItems.totalPrice'),
       fallback: {
-        $multiply: [toNumber(`${path}.price`), toNumber({ $ifNull: [`${path}.quantityOrdered`, 1] })],
+        $multiply: [toNumber('$cartItems.price'), toNumber({ $ifNull: ['$cartItems.quantityOrdered', 1] })],
       },
     },
     in: { $cond: [{ $gt: ['$$total', 0] }, '$$total', '$$fallback'] },
   },
-});
-
-const ITEM_SUM = itemSum('$cartItems');
+};
 
 const paidMatch = (from, to) => ({
   createdAt: { $gte: from, $lt: to },
@@ -618,55 +614,15 @@ async function aggregateNewVsReturning(Order, from, to) {
 
 // Виторг за категоріями. cartItems зберігає ВЕСЬ документ товару, тож category
 // лежить прямо в позиції — джойн до Product не потрібен.
-//
-// ⚠️ Знижка (промокод і ручна) живе на РІВНІ ЗАМОВЛЕННЯ, а не позиції:
-// `together` = сума позицій − discountValue. Тому проста сума позицій дає
-// валовий виторг і не сходиться з числом у «Пульсі». На реальних даних вересня
-// 2026 це давало 103 370 ₴ за категоріями проти 98 580 ₴ обороту — рівно
-// 4 790 ₴ ручних знижок по п'яти замовленнях.
-//
-// Знижку неможливо коректно віднести до однієї категорії, тож розподіляємо її
-// між позиціями пропорційно їхній валовій сумі: кожна позиція дає
-// gross × (together / itemsGross). Сума категорій після цього збігається з
-// виторгом до копійок.
 async function aggregateRevenueByCategory(Order, from, to) {
   const rows = await Order.aggregate([
     { $match: paidMatch(from, to) },
-    // Валова сума позицій — знаменник розподілу. Рахується ДО $unwind, поки
-    // кошик ще цілий.
-    {
-      $addFields: {
-        itemsGross: {
-          $sum: {
-            $map: { input: { $ifNull: ['$cartItems', []] }, as: 'item', in: itemSum('$$item') },
-          },
-        },
-      },
-    },
     { $unwind: '$cartItems' },
     {
       $group: {
         _id: { $ifNull: ['$cartItems.category', 'Інше'] },
-        revenue: {
-          $sum: {
-            $let: {
-              vars: { gross: ITEM_SUM, paid: toNumber('$together') },
-              in: {
-                // Ділення захищене нулем у знаменнику. Замовлення з `together`
-                // = 0 (є одне легасі, #100004) свідомо дає нуль і тут: «Пульс»
-                // рахує його як нульовий виторг, тож у категоріях воно теж має
-                // важити нуль — інакше сума категорій знову розійдеться з
-                // оборотом, а саме заради збігу все це й робиться.
-                $cond: [
-                  { $gt: ['$itemsGross', 0] },
-                  { $multiply: ['$$gross', { $divide: ['$$paid', '$itemsGross'] }] },
-                  0,
-                ],
-              },
-            },
-          },
-        },
-        itemsCount: { $sum: toNumber({ $ifNull: ['$cartItems.quantityOrdered', 1] }) },
+        revenue: { $sum: ITEM_SUM },
+        itemsCount: { $sum: { $ifNull: ['$cartItems.quantityOrdered', 1] } },
       },
     },
     { $sort: { revenue: -1 } },
