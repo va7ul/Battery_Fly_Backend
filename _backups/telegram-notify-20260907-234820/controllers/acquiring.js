@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder } = require('../helpers');
+const { ctrlWrapper, HttpError, sendEmail } = require('../helpers');
 const {
     acquiringPost,
     acquiringGet,
@@ -199,8 +199,6 @@ const createAcquiringOrder = async (req, res) => {
     } catch (error) {
         logAcquiringError('accepted-email', error);
     }
-
-    notifyNewOrder(order);
 
     res.status(200).json({
         orderNum: numberOfOrder,

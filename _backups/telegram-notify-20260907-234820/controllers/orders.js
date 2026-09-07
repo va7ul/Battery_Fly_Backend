@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder } = require('../helpers');
+const { ctrlWrapper, HttpError, sendEmail } = require('../helpers');
 const { NOVA_POST, MAIL_USER } = process.env;
 
 const axios = require('axios');
@@ -168,9 +168,6 @@ const addOrder = async (req, res) => {
     
     await sendEmail(emailText);
 
-    // Без await: сповіщення не має додавати ~300мс до відповіді клієнту.
-    // Хелпер ніколи не реджектиться, тож unhandled rejection тут неможливий.
-    notifyNewOrder(order);
 
     res.status(200).json({
         orderNum: numberOfOrder

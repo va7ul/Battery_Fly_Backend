@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, notifyNewFeedback } = require('../helpers');
+const { ctrlWrapper, HttpError } = require('../helpers');
 const { FeedBack } = require('../models/feedback');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 
@@ -30,9 +30,7 @@ const addFeedBack = async (req, res) => {
     if (!feedBack) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
-
-    notifyNewFeedback(feedBack);
-
+    
     res.status(200).json({
         message: "Feed Back is accepted"
       });

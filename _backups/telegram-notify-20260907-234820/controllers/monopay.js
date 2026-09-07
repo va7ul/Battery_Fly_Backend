@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, notifyNewOrder } = require('../helpers');
+const { ctrlWrapper, HttpError } = require('../helpers');
 const { monopayPost, buildCreatePayload, buildOrderIdPayload, buildReturnPayload, verifyCallbackSignature } = require('../helpers/monopay');
 const { Order } = require('../models/order');
 const { NumberOfOrders } = require('../models/numberOfOrders');
@@ -73,8 +73,6 @@ const createMonopayOrder = async (req, res) => {
 
     order.monopayOrderId = monopayOrderId;
     await order.save();
-
-    notifyNewOrder(order);
 
     res.status(200).json({
         orderNum: numberOfOrder,

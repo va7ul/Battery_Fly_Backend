@@ -25,7 +25,8 @@ controllers/              — по одному файлу на ресурс (or
 models/                   — Mongoose-схеми + Joi-схеми валідації, часто в одному файлі
 routes/api/                — Express-роутери, по одному на префікс
 middlewares/               — validateBody, auth (клієнт), authAdm (адмін), upload (multer), isValidId
-helpers/                    — HttpError, ctrlWrapper, sendEmail, cloudinary, monopay.js (HMAC/axios-клієнт)
+helpers/                    — HttpError, ctrlWrapper, sendEmail, cloudinary, monopay.js (HMAC/axios-клієнт),
+                              telegram.js (сповіщення про замовлення й заявки)
 _backups/<feature>-<timestamp>/  — знімки файлів ПЕРЕД правками в кожній фічовій сесії (конвенція
                                     цього репо, не сміття — лишати як є)
 ```
@@ -384,6 +385,10 @@ HTTP-фетч.
 **monobank / Покупка частинами:**
 `MONOPAY_BASE_URL`, `MONOPAY_STORE_ID`, `MONOPAY_SECRET`, `PUBLIC_URL` (база для `result_callback`)
 
+**Telegram-сповіщення:**
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (один чат і для замовлень, і для заявок),
+`ADMIN_URL` (база для посилання «Відкрити в адмінці»)
+
 **monobank / Онлайн-еквайринг:**
 `ACQUIRING_BASE_URL`, `ACQUIRING_TOKEN` (значення заголовка `X-Token`),
 `PUBLIC_URL` (база для `webHookUrl`), `FRONTEND_URL` (база для `redirectUrl` — сторінка
@@ -392,6 +397,39 @@ HTTP-фетч.
 ⚠️ `.env.example` **частково оновлений**: при роботі над еквайрингом туди додали `PUBLIC_URL`,
 `FRONTEND_URL`, `ACQUIRING_BASE_URL`, `ACQUIRING_TOKEN`, але **трьох monopay-змінних там досі
 немає** — `MONOPAY_BASE_URL`, `MONOPAY_STORE_ID`, `MONOPAY_SECRET`. Варто дописати при нагоді.
+
+## 6.1. Telegram-сповіщення (`helpers/telegram.js`)
+
+Одне повідомлення в один чат на кожне нове замовлення (усі три способи оформлення)
+і на кожну заявку з форми зв'язку. Точки виклику: `addOrder` (orders.js),
+`createMonopayOrder` (monopay.js), `createAcquiringOrder` (acquiring.js),
+`addFeedBack` (feedback.js).
+
+- **Окремий axios-інстанс**, як у monopay: у `controllers/orders.js` глобальному axios
+  прописаний baseURL Нової Пошти, спільний клієнт зламав би або доставку, або сповіщення.
+- ⚠️ **Канал best-effort і НЕ МОЖЕ нічого зламати.** `sendTelegramMessage` ніколи не кидає
+  (усе в try/catch), `notifyNewOrder` / `notifyNewFeedback` додатково ловлять помилки
+  *складання тексту* — саме тому виклик у контролері можна робити **без `await`**
+  (не додає ~300мс до відповіді) без ризику unhandled rejection. Перевірено: з
+  завідомо невірним токеном заявка створюється, відповідь 200, у логах лише
+  `[telegram] send failed`.
+- ⚠️ **`parse_mode: 'HTML'` вимагає екранування.** Ім'я, коментар, назва товару чи адреса
+  з `<` або `&` роблять повідомлення невалідним, і Telegram відхиляє його ЦІЛКОМ.
+  Усе, що прийшло ззовні, проходить через `escapeHtml`.
+- Без `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` хелпер мовчки виходить, не роблячи запиту —
+  локальна розробка не сипле помилками.
+- Кошик обрізається на 10 позиціях (ліміт повідомлення 4096 символів), текст — на 3900.
+- Способи оплати: машинні коди (`card_online`, `monopay_parts`, `card`) перекладаються,
+  решта значень віддаються **як є** — `Накладений платіж`, `Рахунок для юридичних осіб
+  або ФОП` і легасі вже українською, а білий список мовчки перетворив би їх на прочерк.
+- Статус оплати дописується лише для `card_online`: у накладеного платежу чи рахунку
+  такого стану не існує взагалі.
+- Посилання: `${ADMIN_URL}/admin/orders/${numberOfOrder}` — адмінка відкриває замовлення
+  саме за номером, а не за `_id`.
+
+⚠️ **Заявка з форми зв'язку має інші поля, ніж може здатися:** `name`, `tel`,
+`comment` (у запиті приходить як `text`) і власний `numberOfOrder` з того самого
+лічильника, що й замовлення. **Email у заявці не зберігається взагалі.**
 
 ## 7. Важливі рішення й нюанси (неочевидне з коду)
 

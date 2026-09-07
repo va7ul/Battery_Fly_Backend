@@ -3,14 +3,11 @@ const ctrlWrapper = require('./ctrlWrapper');
 const sendEmail = require('./sendEmailNodemailer');
 const {cloudImageProduct} = require('./cloudinary');
 const removeFiles = require('./removeFiles');
-const { notifyNewOrder, notifyNewFeedback } = require('./telegram');
 
 module.exports = {
   HttpError,
   ctrlWrapper,
   sendEmail,
   cloudImageProduct,
-  removeFiles,
-  notifyNewOrder,
-  notifyNewFeedback
+  removeFiles
 };
