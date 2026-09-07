@@ -1004,8 +1004,7 @@ const getDashboard = async (req, res) => {
     unpaidOnline,
     lowStock,
     ordersInWork,
-    wholesaleKeys,
-    inactiveCustomers,
+    wholesaleCustomers,
     newVsReturning,
     revenueByCategory,
     paymentMethods,
@@ -1019,13 +1018,17 @@ const getDashboard = async (req, res) => {
     dashboard.aggregateUnpaidOnline(Order),
     dashboard.aggregateLowStock(Product, ProductZbirky),
     dashboard.aggregateOrdersInWork(Order),
-    dashboard.aggregateWholesaleKeys(Order),
-    dashboard.aggregateInactiveWholesale(Order),
+    dashboard.aggregateWholesaleCustomers(Order, range.from, range.to),
     dashboard.aggregateNewVsReturning(Order, range.from, range.to),
     dashboard.aggregateRevenueByCategory(Order, range.from, range.to),
     dashboard.aggregatePaymentMethods(Order, range.from, range.to),
     dashboard.aggregateRevenueByDay(Order, range.from, range.to),
   ]);
+
+  // Оптовість — статус клієнта, а не властивість періоду, тож один і той
+  // самий список годує і бейдж «опт» у топі, і секцію зниклих.
+  const wholesaleKeys = new Set(wholesaleCustomers.map(customer => customer._id));
+  const inactiveCustomers = dashboard.selectInactiveWholesale(wholesaleCustomers);
 
   const topCustomers = await dashboard.aggregateTopCustomers(
     Order,
