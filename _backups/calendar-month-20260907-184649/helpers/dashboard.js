@@ -35,53 +35,9 @@ function startOfKyivDay(date) {
   return new Date(shifted.getTime() - offset);
 }
 
-// Рік і місяць у київському поясі.
-function kyivMonthParts(date) {
-  const shifted = new Date(date.getTime() + kyivOffsetMs(date));
-
-  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() };
-}
-
-// Початок київського місяця як UTC-Date. Date.UTC сам нормалізує вихід за межі
-// року, тож month = -1 чи 12 дає грудень попереднього / січень наступного.
-//
-// Зсув рахується двічі: спершу орієнтовний за наївною датою, потім уточнений
-// уже за отриманим моментом — між серединою місяця і його першим числом може
-// пролягати перехід на літній час, і одноразовий розрахунок давав би зсув на
-// годину.
-function startOfKyivMonth(year, month) {
-  const naive = Date.UTC(year, month, 1, 0, 0, 0, 0);
-  const approx = new Date(naive - kyivOffsetMs(new Date(naive)));
-
-  return new Date(naive - kyivOffsetMs(approx));
-}
-
-// Розбирає параметр month у форматі YYYY-MM. Повертає null, якщо формат чи
-// значення некоректні — контролер відповість 400, а не тихо покаже не той місяць.
-function parseMonthParam(raw) {
-  if (!raw) {
-    return null;
-  }
-
-  const match = /^(\d{4})-(\d{2})$/.exec(String(raw));
-
-  if (!match) {
-    return null;
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]) - 1;
-
-  if (month < 0 || month > 11 || year < 2000 || year > 2100) {
-    return null;
-  }
-
-  return { year, month };
-}
-
 // Повертає {from, to} поточного періоду і {from, to} попереднього такої ж
 // тривалості — саме з ним порівнюються картки пульсу.
-function resolvePeriod(period, fromRaw, toRaw, monthRaw) {
+function resolvePeriod(period, fromRaw, toRaw) {
   const now = new Date();
   let from;
   let to = now;
@@ -111,44 +67,10 @@ function resolvePeriod(period, fromRaw, toRaw, monthRaw) {
       break;
     }
     case 'month':
-    default: {
-      // Календарний місяць, а не ковзні 30 днів: власник мислить місяцями
-      // («скільки було в липні»), і межа, що повзе разом із сьогоднішньою
-      // датою, робить сусідні відкриття дашборду непорівнюваними.
-      //
-      // Без параметра — поточний місяць; із month=YYYY-MM — будь-який інший.
-      const explicit = parseMonthParam(monthRaw);
-
-      if (monthRaw && !explicit) {
-        return null;
-      }
-
-      const parts = explicit || kyivMonthParts(now);
-      from = startOfKyivMonth(parts.year, parts.month);
-      const nextMonth = startOfKyivMonth(parts.year, parts.month + 1);
-      // Поточний місяць ще не скінчився — обрізаємо по «зараз».
-      to = new Date(Math.min(now.getTime(), nextMonth.getTime()));
-
-      const previousStart = startOfKyivMonth(parts.year, parts.month - 1);
-
-      // Порівнюємо з ТАКОЮ САМОЮ частиною попереднього місяця, а не з усім
-      // ним: 7 днів вересня проти повного серпня показували б обвал на 70%,
-      // якого немає. Для завершеного місяця обрізання нічого не змінює —
-      // виходить повний попередній місяць.
-      return {
-        from,
-        to,
-        previous: {
-          from: previousStart,
-          to: new Date(
-            Math.min(
-              from.getTime(),
-              previousStart.getTime() + (to.getTime() - from.getTime())
-            )
-          ),
-        },
-      };
-    }
+    default:
+      from = new Date(startOfKyivDay(now).getTime() - 29 * DAY_MS);
+      shiftDays = 30;
+      break;
   }
 
   // Попередній період зсуваємо на ЦІЛУ кількість діб, а не на тривалість

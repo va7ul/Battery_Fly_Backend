@@ -986,8 +986,8 @@ const getDashboard = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const { period = 'month', from, to } = req.query;
-  const range = dashboard.resolvePeriod(period, from, to);
+  const { period = 'month', from, to, month } = req.query;
+  const range = dashboard.resolvePeriod(period, from, to, month);
 
   if (!range) {
     throw HttpError(400, 'Invalid period range');
