@@ -182,15 +182,13 @@ async function aggregateProcessingTime(Order, from, to) {
 
 // ─── Тривоги ───────────────────────────────────────────────────────────────
 
-// Замовлення вважається застряглим, якщо провисіло в «Нове» довше доби.
-// Було три дні — на практиці це надто пізно: клієнт устигає передумати.
-const STUCK_AFTER_HOURS = 24;
+const STUCK_AFTER_DAYS = 3;
 // Онлайн-оплату не позначаємо проблемною одразу: клієнт може бути на сторінці
 // банку просто зараз.
 const UNPAID_AFTER_HOURS = 2;
 
 async function aggregateStuckOrders(Order) {
-  const threshold = new Date(Date.now() - STUCK_AFTER_HOURS * 60 * 60 * 1000);
+  const threshold = new Date(Date.now() - STUCK_AFTER_DAYS * DAY_MS);
 
   return Order.aggregate([
     { $match: { status: 'Нове', createdAt: { $lt: threshold } } },
@@ -205,13 +203,6 @@ async function aggregateStuckOrders(Order) {
         createdAt: 1,
         daysWaiting: {
           $floor: { $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, DAY_MS] },
-        },
-        // З добовим порогом самих лише днів мало: 25 і 47 годин обидва
-        // показувались би як «1 день». Години дають UI змогу написати точніше.
-        hoursWaiting: {
-          $floor: {
-            $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60 * 60 * 1000],
-          },
         },
       },
     },
@@ -297,178 +288,25 @@ const WHOLESALE_MIN_ORDERS = 3;
 const WHOLESALE_MIN_SUM = 50000;
 const WHOLESALE_WINDOW_DAYS = 30;
 
-// Профілі клієнтів-оптовиків.
-//
-// ⚠️ Оптовість — статус, який заробляється ОДИН РАЗ і більше не втрачається:
-// клієнт є оптовиком, якщо ХОЧ КОЛИСЬ мав >3 замовлень і >50 000 ₴ у межах
-// будь-якого 30-денного вікна. Раніше статус перераховувався у вікні перед
-// останнім замовленням, і це давало систематично хибний результат: перед тим,
-// як зникнути, клієнт майже завжди зменшує темп, тож в останньому вікні
-// порогу вже не було — і найцінніші «зниклі оптовики» просто не потрапляли
-// у вибірку.
-//
-// Вікна будуються від кожного замовлення вперед на 30 днів. Замовлень на
-// одного клієнта — десятки, тож квадратична перевірка тут безпечна.
-async function aggregateWholesaleCustomers(Order, from, to) {
+// Ключі клієнтів, які за визначенням є оптовиками ЗАРАЗ: більше 3 замовлень і
+// понад 50 000 ₴ за останні 30 днів (обидві умови одночасно).
+async function aggregateWholesaleKeys(Order) {
+  const from = new Date(Date.now() - WHOLESALE_WINDOW_DAYS * DAY_MS);
+
   const rows = await Order.aggregate([
-    { $match: { status: { $ne: CANCELLED_STATUS } } },
+    { $match: paidMatch(from, new Date()) },
     {
       $group: {
         _id: CUSTOMER_KEY,
-        orders: { $push: { createdAt: '$createdAt', together: toNumber('$together') } },
-        lastOrderAt: { $max: '$createdAt' },
-        firstName: { $last: '$firstName' },
-        lastName: { $last: '$lastName' },
-        email: { $last: '$email' },
-        tel: { $last: '$tel' },
+        ordersCount: { $sum: 1 },
+        totalSum: { $sum: toNumber('$together') },
       },
     },
-    { $match: { _id: { $ne: '' } } },
-    {
-      $addFields: {
-        qualifyingWindows: {
-          $filter: {
-            input: {
-              $map: {
-                input: '$orders',
-                as: 'anchor',
-                in: {
-                  $let: {
-                    vars: {
-                      window: {
-                        $filter: {
-                          input: '$orders',
-                          as: 'order',
-                          cond: {
-                            $and: [
-                              { $gte: ['$$order.createdAt', '$$anchor.createdAt'] },
-                              {
-                                $lt: [
-                                  '$$order.createdAt',
-                                  {
-                                    $add: [
-                                      '$$anchor.createdAt',
-                                      WHOLESALE_WINDOW_DAYS * DAY_MS,
-                                    ],
-                                  },
-                                ],
-                              },
-                            ],
-                          },
-                        },
-                      },
-                    },
-                    in: {
-                      count: { $size: '$$window' },
-                      sum: { $sum: '$$window.together' },
-                    },
-                  },
-                },
-              },
-            },
-            as: 'window',
-            cond: {
-              $and: [
-                { $gt: ['$$window.count', WHOLESALE_MIN_ORDERS] },
-                { $gt: ['$$window.sum', WHOLESALE_MIN_SUM] },
-              ],
-            },
-          },
-        },
-        // Замовлення всередині вибраного періоду — потрібні, щоб зрозуміти,
-        // чи клієнт мовчав саме в цьому періоді.
-        ordersInPeriod: {
-          $filter: {
-            input: '$orders',
-            as: 'order',
-            cond: {
-              $and: [
-                { $gte: ['$$order.createdAt', from] },
-                { $lt: ['$$order.createdAt', to] },
-              ],
-            },
-          },
-        },
-        // Усе, що було ДО кінця періоду. Потрібне, щоб рахувати мовчання
-        // станом на кінець періоду, а не на сьогодні: у виборі за липень
-        // важливо, скільки клієнт мовчав ТОДІ, а не скільки минуло відтоді.
-        ordersBeforePeriodEnd: {
-          $filter: {
-            input: '$orders',
-            as: 'order',
-            cond: { $lt: ['$$order.createdAt', to] },
-          },
-        },
-      },
-    },
-    { $match: { 'qualifyingWindows.0': { $exists: true } } },
-    {
-      $addFields: {
-        lastOrderBeforePeriodEnd: { $max: '$ordersBeforePeriodEnd.createdAt' },
-      },
-    },
-    {
-      $project: {
-        _id: 1,
-        firstName: 1,
-        lastName: 1,
-        email: 1,
-        tel: 1,
-        lastOrderAt: 1,
-        lastOrderBeforePeriodEnd: 1,
-        ordersInPeriodCount: { $size: '$ordersInPeriod' },
-        totalSum: { $sum: '$orders.together' },
-        ordersCount: { $size: '$orders' },
-        daysSilentAtPeriodEnd: {
-          $cond: [
-            { $ifNull: ['$lastOrderBeforePeriodEnd', false] },
-            {
-              $floor: {
-                $divide: [
-                  { $subtract: [to, '$lastOrderBeforePeriodEnd'] },
-                  DAY_MS,
-                ],
-              },
-            },
-            null,
-          ],
-        },
-      },
-    },
+    { $match: { ordersCount: { $gt: WHOLESALE_MIN_ORDERS }, totalSum: { $gt: WHOLESALE_MIN_SUM } } },
+    { $project: { _id: 1 } },
   ]);
 
-  return rows;
-}
-
-// Оптовики, які мовчали у ВИБРАНОМУ періоді.
-//
-// Прив'язка до періоду — свідома: розділ мусить відповідати на питання «хто з
-// оптовиків нічого не купив за цей місяць», і тому реагувати на фільтр угорі.
-// Жорсткого вікна «20–60 днів» більше немає: воно ховало саме тих, хто зник
-// давно, хоча це найсильніший сигнал зателефонувати. Давність показуємо
-// числом, щоб було видно різницю між «місяць тому» і «рік тому».
-function selectInactiveWholesale(customers, limit = 10) {
-  return customers
-    .filter(
-      customer =>
-        // Жодного замовлення в періоді — і при цьому клієнт існував ДО його
-        // кінця. Перевірка на lastOrderAt < from була б помилкою: клієнт, який
-        // мовчав у липні, але повернувся в серпні, у вибірці за липень має
-        // бути — саме тоді він і зникав.
-        customer.ordersInPeriodCount === 0 && customer.lastOrderBeforePeriodEnd
-    )
-    .sort((a, b) => b.daysSilentAtPeriodEnd - a.daysSilentAtPeriodEnd)
-    .slice(0, limit)
-    .map(customer => ({
-      key: customer._id,
-      name: `${customer.lastName || ''} ${customer.firstName || ''}`.trim(),
-      email: customer.email,
-      tel: customer.tel,
-      daysSilent: customer.daysSilentAtPeriodEnd,
-      lastOrderAt: customer.lastOrderBeforePeriodEnd,
-      totalSum: customer.totalSum,
-      ordersCount: customer.ordersCount,
-    }));
+  return new Set(rows.map(row => row._id).filter(Boolean));
 }
 
 async function aggregateTopCustomers(Order, from, to, wholesaleKeys, limit = 8) {
@@ -498,6 +336,98 @@ async function aggregateTopCustomers(Order, from, to, wholesaleKeys, limit = 8) 
     totalSum: row.totalSum,
     ordersCount: row.ordersCount,
     isWholesale: wholesaleKeys.has(row._id),
+  }));
+}
+
+const INACTIVE_MIN_DAYS = 20;
+const INACTIVE_MAX_DAYS = 60;
+
+// Оптовики, які давно не купували.
+//
+// ⚠️ Тут оптовість рахується НЕ за останні 30 днів (як для бейджа в топі), а за
+// 30 днів ДО останнього замовлення клієнта. Інакше список був би структурно
+// порожній: людина, яка не купувала 40 днів, за визначенням не може мати
+// 3+ замовлень за останні 30. Тобто питання тут — «чи був він оптовиком, поки
+// був активний», і це єдине прочитання, яке дає осмислений результат.
+async function aggregateInactiveWholesale(Order, limit = 10) {
+  const now = Date.now();
+  const oldestAllowed = new Date(now - INACTIVE_MAX_DAYS * DAY_MS);
+  const newestAllowed = new Date(now - INACTIVE_MIN_DAYS * DAY_MS);
+
+  const rows = await Order.aggregate([
+    { $match: { status: { $ne: CANCELLED_STATUS } } },
+    {
+      $group: {
+        _id: CUSTOMER_KEY,
+        lastOrderAt: { $max: '$createdAt' },
+        firstName: { $last: '$firstName' },
+        lastName: { $last: '$lastName' },
+        email: { $last: '$email' },
+        tel: { $last: '$tel' },
+        orders: { $push: { createdAt: '$createdAt', together: toNumber('$together') } },
+      },
+    },
+    {
+      $match: {
+        _id: { $ne: '' },
+        lastOrderAt: { $gte: oldestAllowed, $lt: newestAllowed },
+      },
+    },
+    {
+      $addFields: {
+        windowOrders: {
+          $filter: {
+            input: '$orders',
+            as: 'order',
+            cond: {
+              $gte: [
+                '$$order.createdAt',
+                { $subtract: ['$lastOrderAt', WHOLESALE_WINDOW_DAYS * DAY_MS] },
+              ],
+            },
+          },
+        },
+      },
+    },
+    {
+      $addFields: {
+        windowCount: { $size: '$windowOrders' },
+        windowSum: { $sum: '$windowOrders.together' },
+      },
+    },
+    {
+      $match: {
+        windowCount: { $gt: WHOLESALE_MIN_ORDERS },
+        windowSum: { $gt: WHOLESALE_MIN_SUM },
+      },
+    },
+    { $sort: { lastOrderAt: 1 } },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        tel: 1,
+        lastOrderAt: 1,
+        windowSum: 1,
+        windowCount: 1,
+        daysSinceLastOrder: {
+          $floor: { $divide: [{ $subtract: ['$$NOW', '$lastOrderAt'] }, DAY_MS] },
+        },
+      },
+    },
+  ]);
+
+  return rows.map(row => ({
+    key: row._id,
+    name: `${row.lastName || ''} ${row.firstName || ''}`.trim(),
+    email: row.email,
+    tel: row.tel,
+    daysSinceLastOrder: row.daysSinceLastOrder,
+    totalSum: row.windowSum,
+    ordersCount: row.windowCount,
   }));
 }
 
@@ -606,9 +536,9 @@ module.exports = {
   aggregateUnpaidOnline,
   aggregateLowStock,
   aggregateOrdersInWork,
-  aggregateWholesaleCustomers,
-  selectInactiveWholesale,
+  aggregateWholesaleKeys,
   aggregateTopCustomers,
+  aggregateInactiveWholesale,
   aggregateNewVsReturning,
   aggregateRevenueByCategory,
   aggregatePaymentMethods,
