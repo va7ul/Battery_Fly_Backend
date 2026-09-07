@@ -338,11 +338,6 @@ const getOrders = async (req, res) => {
           monopayState: order.monopayState,
           monopaySubState: order.monopaySubState,
           monopayOrderId: order.monopayOrderId,
-          acquiringInvoiceId: order.acquiringInvoiceId,
-          acquiringStatus: order.acquiringStatus,
-          acquiringPageUrl: order.acquiringPageUrl,
-          acquiringFailureReason: order.acquiringFailureReason,
-          acquiringModifiedDate: order.acquiringModifiedDate,
           createdAt: order.createdAt,
           status: order.status,
         };

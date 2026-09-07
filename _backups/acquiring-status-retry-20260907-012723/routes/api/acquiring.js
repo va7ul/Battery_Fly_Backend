@@ -7,10 +7,6 @@ const router = express.Router();
 
 router.post('/create', validateBody(schemas.createAcquiring), ctrl.createAcquiringOrder);
 router.post('/webhook', ctrl.acquiringWebhook);
-// Публічний: сторінка результату оплати. Шукає замовлення за невгадуваним ref
-// (або invoiceId) і віддає ЛИШЕ статус оплати, без персональних даних.
-router.post('/public-status', validateBody(schemas.publicAcquiringStatus), ctrl.getPublicAcquiringStatus);
 router.get('/status/:id', authAdm, ctrl.getAcquiringStatus);
-router.post('/resend/:id', authAdm, ctrl.resendAcquiringOrder);
 
 module.exports = router;

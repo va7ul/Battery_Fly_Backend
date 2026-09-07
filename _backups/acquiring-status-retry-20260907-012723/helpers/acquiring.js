@@ -8,52 +8,6 @@ const acquiringClient = axios.create({ baseURL: process.env.ACQUIRING_BASE_URL }
 // ISO 4217, гривня.
 const CCY_UAH = 980;
 
-// Статуси рахунку monobank (звірено з докою: created, processing, hold,
-// success, failure, reversed, expired).
-const ACQUIRING_STATUS = {
-  CREATED: 'created',
-  PROCESSING: 'processing',
-  HOLD: 'hold',
-  SUCCESS: 'success',
-  FAILURE: 'failure',
-  REVERSED: 'reversed',
-  EXPIRED: 'expired',
-};
-
-// Стани, після яких стан рахунку вже не зміниться сам по собі — питати
-// monobank про них немає сенсу.
-const FINAL_STATUSES = new Set([
-  ACQUIRING_STATUS.SUCCESS,
-  ACQUIRING_STATUS.REVERSED,
-  ACQUIRING_STATUS.EXPIRED,
-]);
-
-// ⚠️ failure свідомо НЕ фінальний: клієнт може повторити оплату на тому самому
-// рахунку, поки той живий, і статус зміниться на success.
-function isFinalStatus(status) {
-  return FINAL_STATUSES.has(status);
-}
-
-// Ми не передаємо `validity` у invoice/create, тож діє дефолт monobank — 24
-// години (дока: "за замовчуванням рахунок перестає бути дійсним через 24
-// години"). Використовується, щоб не пропонувати повтор оплати за посиланням,
-// яке вже точно мертве. Статус `expired` вебхуком НЕ приходить (дока: вебхуки
-// шлються "окрім статусу expired"), тому по часу рахуємо самі.
-const INVOICE_VALIDITY_MS = 24 * 60 * 60 * 1000;
-
-function isInvoiceStillValid(createdAt) {
-  if (!createdAt) {
-    return false;
-  }
-  const created = new Date(createdAt).getTime();
-  return Number.isFinite(created) && Date.now() - created < INVOICE_VALIDITY_MS;
-}
-
-// Невгадуваний публічний ідентифікатор замовлення для сторінки результату.
-function generatePublicRef() {
-  return crypto.randomBytes(16).toString('hex');
-}
-
 // На відміну від "Покупки частинами" (helpers/monopay.js) еквайринг НЕ вимагає
 // HMAC-підпису вихідних запитів: автентифікація — це заголовок X-Token, тому тіло
 // можна віддавати axios обʼєктом, без ручного JSON.stringify.
@@ -226,40 +180,6 @@ function verifyWebhookSignature(rawBody, xSignHeader, pubKeyBase64) {
   }
 }
 
-// Тротлінг синхронізації з monobank для ПУБЛІЧНОГО роута статусу: сторінка
-// результату опитує його раз на кілька секунд, і без обмеження кожен такий
-// опит (свій чи чужий) перетворювався б на запит до monobank.
-const statusSyncAt = new Map();
-const STATUS_SYNC_INTERVAL_MS = 2000;
-const STATUS_SYNC_MAX_ENTRIES = 500;
-
-function shouldSyncStatus(invoiceId) {
-  if (!invoiceId) {
-    return false;
-  }
-
-  const now = Date.now();
-  const last = statusSyncAt.get(invoiceId);
-
-  if (last && now - last < STATUS_SYNC_INTERVAL_MS) {
-    return false;
-  }
-
-  // Мапа живе в памʼяті процесу — прибираємо старі записи, щоб вона не росла
-  // безмежно на довгому аптаймі.
-  if (statusSyncAt.size >= STATUS_SYNC_MAX_ENTRIES) {
-    for (const [key, at] of statusSyncAt) {
-      if (now - at > STATUS_SYNC_INTERVAL_MS * 30) {
-        statusSyncAt.delete(key);
-      }
-    }
-  }
-
-  statusSyncAt.set(invoiceId, now);
-
-  return true;
-}
-
 module.exports = {
   acquiringClient,
   acquiringPost,
@@ -269,9 +189,4 @@ module.exports = {
   buildInvoicePayload,
   getMerchantPubKey,
   verifyWebhookSignature,
-  ACQUIRING_STATUS,
-  isFinalStatus,
-  isInvoiceStillValid,
-  generatePublicRef,
-  shouldSyncStatus,
 };
