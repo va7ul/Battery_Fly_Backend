@@ -31,7 +31,6 @@ router.put('/promo-code/:id', authAdm, ctrl.updatePromocode);
 router.delete('/promo-code/:id', authAdm, ctrl.deletePromocode);
 router.get('/feedback', authAdm, ctrl.getFeedback);
 router.put('/put-order/:id', authAdm, ctrl.updateOrderById);
-router.get('/dashboard', authAdm, ctrl.getDashboard);
 
 
 

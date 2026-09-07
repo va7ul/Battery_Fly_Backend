@@ -15,7 +15,6 @@ const { QuickOrder } = require('../models/quickOrder');
 const { User } = require('../models/user');
 const { PromoCode } = require('../models/promoCode');
 const {FeedBack} = require('../models/feedback')
-const dashboard = require('../helpers/dashboard');
 
 
 
@@ -947,24 +946,7 @@ const updateOrderById = async (req, res) => {
     }
   }
 
-  // deliveredAt проставляє ВИКЛЮЧНО сервер. Значення з тіла запиту прибираємо:
-  // адмінка шле назад увесь об'єкт замовлення, отриманий з GET, і без цього
-  // рядка клієнт міг би перезаписати або обнулити дату доставки.
-  const updateFields = { ...req.body };
-  delete updateFields.deliveredAt;
-
-  // Пишеться один раз — при першому переході в "Доставлено". Повторні
-  // збереження вже доставленого замовлення дату не зсувають, інакше середній
-  // час обробки поплив би від будь-якого редагування.
-  if (status === 'Доставлено') {
-    const current = await Order.findOne({ _id: req.params.id }, 'deliveredAt');
-
-    if (current && !current.deliveredAt) {
-      updateFields.deliveredAt = new Date();
-    }
-  }
-
-  const order = await Order.findOneAndUpdate({ _id: req.params.id }, updateFields, { new: true });
+  const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
   
       if (!order) {
         throw HttpError(500, 'Internal server eror, write code in DB');
@@ -972,112 +954,6 @@ const updateOrderById = async (req, res) => {
       res.status(200).json({
         result: order
       });
-};
-
-// GET /api/adm/dashboard?period=month — усе для головної сторінки адмінки
-// одним запитом. Кожен блок рахує MongoDB; сюди приїжджають готові числа та
-// короткі списки, сирих замовлень у Node немає.
-const getDashboard = async (req, res) => {
-  const { token } = req.user;
-
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const { period = 'month', from, to } = req.query;
-  const range = dashboard.resolvePeriod(period, from, to);
-
-  if (!range) {
-    throw HttpError(400, 'Invalid period range');
-  }
-
-  // Блоки незалежні один від одного — рахуємо паралельно, щоб дашборд
-  // відкривався за один похід у базу по часу, а не за суму всіх агрегацій.
-  const [
-    totals,
-    prevTotals,
-    processing,
-    prevProcessing,
-    stuckOrders,
-    unpaidOnline,
-    lowStock,
-    ordersInWork,
-    wholesaleKeys,
-    inactiveCustomers,
-    newVsReturning,
-    revenueByCategory,
-    paymentMethods,
-    revenueByDay,
-  ] = await Promise.all([
-    dashboard.aggregateTotals(Order, range.from, range.to),
-    dashboard.aggregateTotals(Order, range.previous.from, range.previous.to),
-    dashboard.aggregateProcessingTime(Order, range.from, range.to),
-    dashboard.aggregateProcessingTime(Order, range.previous.from, range.previous.to),
-    dashboard.aggregateStuckOrders(Order),
-    dashboard.aggregateUnpaidOnline(Order),
-    dashboard.aggregateLowStock(Product, ProductZbirky),
-    dashboard.aggregateOrdersInWork(Order),
-    dashboard.aggregateWholesaleKeys(Order),
-    dashboard.aggregateInactiveWholesale(Order),
-    dashboard.aggregateNewVsReturning(Order, range.from, range.to),
-    dashboard.aggregateRevenueByCategory(Order, range.from, range.to),
-    dashboard.aggregatePaymentMethods(Order, range.from, range.to),
-    dashboard.aggregateRevenueByDay(Order, range.from, range.to),
-  ]);
-
-  const topCustomers = await dashboard.aggregateTopCustomers(
-    Order,
-    range.from,
-    range.to,
-    wholesaleKeys
-  );
-
-  res.status(200).json({
-    result: {
-      period: {
-        type: period,
-        from: range.from,
-        to: range.to,
-        previousFrom: range.previous.from,
-        previousTo: range.previous.to,
-      },
-      pulse: {
-        revenue: {
-          value: totals.revenue,
-          change: dashboard.percentChange(totals.revenue, prevTotals.revenue),
-        },
-        ordersCount: {
-          value: totals.ordersCount,
-          change: dashboard.percentChange(totals.ordersCount, prevTotals.ordersCount),
-        },
-        avgCheck: {
-          value: totals.avgCheck,
-          change: dashboard.percentChange(totals.avgCheck, prevTotals.avgCheck),
-        },
-        // hours === null означає "даних ще нема" (жодного замовлення з
-        // deliveredAt у періоді), а не нуль годин.
-        avgProcessingTime: {
-          value: processing.hours,
-          count: processing.count,
-          change: dashboard.percentChange(processing.hours, prevProcessing.hours),
-        },
-      },
-      alerts: {
-        unpaidOnline,
-        stuckOrders,
-        lowStock,
-      },
-      ordersInWork,
-      topCustomers,
-      inactiveCustomers,
-      revenueByCategory,
-      paymentMethods,
-      customersNewVsReturning: newVsReturning,
-      revenueByDay,
-    },
-  });
 };
 
 
@@ -1112,7 +988,6 @@ module.exports = {
   deleteZbirka: ctrlWrapper(deleteZbirka),
   getFeedback: ctrlWrapper(getFeedback),
   updateOrderById: ctrlWrapper(updateOrderById),
-  getDashboard: ctrlWrapper(getDashboard),
 
 
 
