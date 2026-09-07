@@ -594,15 +594,14 @@ const deletePromocode = async (req, res) => {
 
   const { id } = req.params;
 
-  // Раніше тут стояла заборона видаляти код, який уже є в user.promoCodes.
-  // Вона робила промокод невидаляним НАЗАВЖДИ після першого ж використання:
-  // з трьох кодів у базі два не можна було прибрати взагалі.
-  //
-  // user.promoCodes — це історія використаних кодів, потрібна рівно для
-  // одного: не дати клієнту застосувати той самий код двічі (див.
-  // getPromoCode в controllers/orders.js). Видалення коду цю історію не
-  // ламає — назва просто лишається в списку, а знижку за нею все одно вже
-  // ніхто не отримає, бо самого коду більше немає.
+  const promo = await PromoCode.findOne({ _id: id });
+  
+  const promoInUse = await User.findOne({ promoCodes: promo.name })
+  
+  if (promoInUse) {
+    throw HttpError(500, 'Promocode in use');
+  }
+ 
   const promoDelete = await PromoCode.findByIdAndDelete({_id: id});
 
   if (!promoDelete) {
