@@ -182,15 +182,13 @@ async function aggregateProcessingTime(Order, from, to) {
 
 // ─── Тривоги ───────────────────────────────────────────────────────────────
 
-// Замовлення вважається застряглим, якщо провисіло в «Нове» довше доби.
-// Було три дні — на практиці це надто пізно: клієнт устигає передумати.
-const STUCK_AFTER_HOURS = 24;
+const STUCK_AFTER_DAYS = 3;
 // Онлайн-оплату не позначаємо проблемною одразу: клієнт може бути на сторінці
 // банку просто зараз.
 const UNPAID_AFTER_HOURS = 2;
 
 async function aggregateStuckOrders(Order) {
-  const threshold = new Date(Date.now() - STUCK_AFTER_HOURS * 60 * 60 * 1000);
+  const threshold = new Date(Date.now() - STUCK_AFTER_DAYS * DAY_MS);
 
   return Order.aggregate([
     { $match: { status: 'Нове', createdAt: { $lt: threshold } } },
@@ -205,13 +203,6 @@ async function aggregateStuckOrders(Order) {
         createdAt: 1,
         daysWaiting: {
           $floor: { $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, DAY_MS] },
-        },
-        // З добовим порогом самих лише днів мало: 25 і 47 годин обидва
-        // показувались би як «1 день». Години дають UI змогу написати точніше.
-        hoursWaiting: {
-          $floor: {
-            $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60 * 60 * 1000],
-          },
         },
       },
     },
