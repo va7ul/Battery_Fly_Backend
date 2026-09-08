@@ -24,7 +24,7 @@ const productSchema = new Schema(
             required: [true, 'Image is required']
         },
         price: {
-            type: String,
+            type: Number,
             required: [true, 'Price is required']
         },
         quantity: {
@@ -49,46 +49,22 @@ const productSchema = new Schema(
             type: String,
             required: [true, 'Category is required']
         },
-        capacity: {
-            type: Object,
-            
-            any: {
-                type: Object,
-                description: {
-                    type: String,
-                },
-                price: {
-                    type: Number
-                },
-                holder: {
-                    type: Number,
-                    default: 0
-                },
-            },
-            required: [true, 'capacity is required']
-        },
-        holder: {
-            type: Boolean,
+        type: {
+            type: String,
+            required: [true, 'Type is required']
         },
         information: {
             type: String,
             required: [true, 'Information is required']
         },
-        // Позиція товару в СВОЄМУ списку (див. helpers/productScopes.js).
-        // Менший order — вище. null означає «порядок ще не заданий»: такі
-        // товари сортуються після впорядкованих.
-        order: {
-            type: Number,
-            default: null,
-        },
-        },
-    
+
+    },
     { versionKey: false, timestamps: true }
 );
 
-const ProductZbirky = model('products_zbirkies', productSchema);
+const Product = model('product', productSchema);
 
 module.exports = {
   schemas,
-  ProductZbirky,
+  Product,
 };

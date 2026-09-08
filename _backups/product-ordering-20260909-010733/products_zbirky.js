@@ -74,13 +74,6 @@ const productSchema = new Schema(
             type: String,
             required: [true, 'Information is required']
         },
-        // Позиція товару в СВОЄМУ списку (див. helpers/productScopes.js).
-        // Менший order — вище. null означає «порядок ще не заданий»: такі
-        // товари сортуються після впорядкованих.
-        order: {
-            type: Number,
-            default: null,
-        },
         },
     
     { versionKey: false, timestamps: true }
