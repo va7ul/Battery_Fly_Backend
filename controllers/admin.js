@@ -27,6 +27,7 @@ const { User } = require('../models/user');
 const { PromoCode } = require('../models/promoCode');
 const {FeedBack} = require('../models/feedback')
 const dashboard = require('../helpers/dashboard');
+const { PRODUCT_SCOPES, getNextOrder } = require('../helpers/productScopes');
 
 
 
@@ -96,7 +97,12 @@ const addProduct = async (req, res) => {
   const images = await cloudImageProduct(req.files)
 
 
-  const addResult = await Product.create({ ...req.body, codeOfGood, image: images })
+  // Новий товар стає ОСТАННІМ у своєму списку, а не першим-ліпшим: інакше він
+  // з'являвся б у випадковому місці вітрини, і власнику довелося б шукати його
+  // серед решти, щоб перетягнути.
+  const order = await getNextOrder(req.body);
+
+  const addResult = await Product.create({ ...req.body, codeOfGood, image: images, order })
     
   
   if (!addResult) {
@@ -168,7 +174,9 @@ const addProductZbirky = async (req, res) => {
 
     const images = await cloudImageProduct(req.files)
 
-    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images, capacity: {...newCapacity} })
+    const order = await getNextOrder(req.body);
+
+    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images, capacity: {...newCapacity}, order })
     if (!addResult) {
         throw HttpError(500, 'Internal server eror, write code in DB');
     }
@@ -1172,6 +1180,57 @@ const markFeedbackViewed = markViewed(FeedBack, params => ({
   _id: params.id,
 }));
 
+
+// Зберегти новий порядок товарів у межах одного списку.
+//
+// Приймає ВЕСЬ список області, а не пару «що куди перемістили»: після
+// перетягування адмінка вже знає підсумковий порядок, і надіслати його цілком
+// дешевше й надійніше, ніж відтворювати перестановку на сервері. Ідемпотентно:
+// повторний той самий запит перезапише ті самі числа.
+const reorderProducts = async (req, res) => {
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { scope, orderedIds } = req.body;
+  const target = PRODUCT_SCOPES[scope];
+
+  if (!target) {
+    throw HttpError(400, `Невідомий список товарів: ${scope}`);
+  }
+
+  if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+    throw HttpError(400, 'orderedIds має бути непорожнім масивом');
+  }
+
+  const { model, filter } = target;
+
+  // Перевіряємо, що всі id справді з цього списку. Без перевірки помилка в UI
+  // (напр. неочищений стан при переході між категоріями) тихо проставила б
+  // чужим товарам порядок сусідньої категорії.
+  const existing = await model.find(filter, { _id: 1 }).lean();
+  const allowed = new Set(existing.map(item => String(item._id)));
+  const unknown = orderedIds.filter(id => !allowed.has(String(id)));
+
+  if (unknown.length > 0) {
+    throw HttpError(400, `Товари не належать списку «${scope}»: ${unknown.join(', ')}`);
+  }
+
+  await model.bulkWrite(
+    orderedIds.map((id, index) => ({
+      updateOne: { filter: { _id: id }, update: { $set: { order: index } } },
+    }))
+  );
+
+  res.status(200).json({
+    result: { scope, updated: orderedIds.length },
+  });
+};
+
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -1208,6 +1267,7 @@ module.exports = {
   markOrderViewed: ctrlWrapper(markOrderViewed),
   markPrint3dViewed: ctrlWrapper(markPrint3dViewed),
   markFeedbackViewed: ctrlWrapper(markFeedbackViewed),
+  reorderProducts: ctrlWrapper(reorderProducts),
 
 
 

@@ -2,6 +2,7 @@ const { Product } = require('../models/product');
 const { CodeOfGoods } = require('../models/codeOdGoods')
 const {ProductZbirky} = require('../models/products_zbirky')
 const { HttpError, ctrlWrapper } = require('../helpers');
+const { ORDER_SORT, sortByOrder } = require('../helpers/productScopes');
 
 const getAllProducts = async (req, res) => {
     console.log("All")
@@ -38,6 +39,12 @@ const getProductsArray = async (req, res) => {
     });
 }
 
+// ⚠️ Змішані списки (усі акумулятори, популярне, акції) за `order` НЕ
+// сортуються навмисно. order унікальний у межах СВОГО списку, тож у збірному
+// переліку товари різних типів мали б однакові номери й перемішались би між
+// собою — сторінка /batteries змінила б вигляд, хоч ніхто нічого не
+// перетягував. В адмінці спільної сторінки для них немає, а отже й порядку,
+// який треба було б повторити.
 const getAllBatterys = async (req, res) => {
     console.log("All Batterys")
     const result = await Product.find({ category: "battery" })
@@ -54,7 +61,7 @@ const getAllBatterys = async (req, res) => {
 
 const getAssemblies = async (req, res) => {
     console.log("getAssemblies")
-    const result = await ProductZbirky.find({ category: "assembly" });
+    const result = sortByOrder(await ProductZbirky.find({ category: "assembly" }).sort(ORDER_SORT));
     
     
     
@@ -85,7 +92,7 @@ const getSales = async (req, res) => {
 
 const getBatterys21700 = async (req, res) => {
     console.log("Batterys 21700")
-    const result = await Product.find({ type: "21700" })
+    const result = sortByOrder(await Product.find({ type: "21700" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -97,7 +104,7 @@ const getBatterys21700 = async (req, res) => {
 
 const getBatterys18650 = async (req, res) => {
     console.log("Batterys 18650")
-    const result = await Product.find({ type: "18650" })
+    const result = sortByOrder(await Product.find({ type: "18650" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -109,7 +116,7 @@ const getBatterys18650 = async (req, res) => {
 
 const getBatterys32650 = async (req, res) => {
     console.log("Batterys 18650")
-    const result = await Product.find({ type: "32650" })
+    const result = sortByOrder(await Product.find({ type: "32650" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -121,7 +128,7 @@ const getBatterys32650 = async (req, res) => {
 
 const getBatterysFpv = async (req, res) => {
     console.log("getBatterysFpv")
-    const result = await ProductZbirky.find({ category: "fpv" })
+    const result = sortByOrder(await ProductZbirky.find({ category: "fpv" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -133,7 +140,7 @@ const getBatterysFpv = async (req, res) => {
 
 const getBatterysTransport = async (req, res) => {
     console.log("getBatterysTransport")
-    const result = await ProductZbirky.find({ category: "transport" })
+    const result = sortByOrder(await ProductZbirky.find({ category: "transport" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -145,7 +152,7 @@ const getBatterysTransport = async (req, res) => {
 
 const getBatterysToys = async (req, res) => {
     console.log("getBatterysToys")
-    const result = await ProductZbirky.find({ category: "toys" })
+    const result = sortByOrder(await ProductZbirky.find({ category: "toys" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -179,7 +186,7 @@ const getProductById = async (req, res) => {
 
 const getDevices = async (req, res) => {
     console.log("getDevices")
-    const result = await Product.find({ category: "devices" })
+    const result = sortByOrder(await Product.find({ category: "devices" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -191,7 +198,7 @@ const getDevices = async (req, res) => {
 
 const getMaterials = async (req, res) => {
     console.log("getMaterials")
-    const result = await Product.find({ category: "materials" })
+    const result = sortByOrder(await Product.find({ category: "materials" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -203,7 +210,7 @@ const getMaterials = async (req, res) => {
 
 const getBatterysLipo = async (req, res) => {
     console.log("Batterys 21700")
-    const result = await Product.find({ type: "li-po" })
+    const result = sortByOrder(await Product.find({ type: "li-po" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
@@ -215,7 +222,7 @@ const getBatterysLipo = async (req, res) => {
 
 const getBatterysLidepo4 = async (req, res) => {
     console.log("Batterys 21700")
-    const result = await Product.find({ type: "lifepo4" })
+    const result = sortByOrder(await Product.find({ type: "lifepo4" }).sort(ORDER_SORT))
     
     if (!result) {
         throw HttpError(401, 'Bad request');
