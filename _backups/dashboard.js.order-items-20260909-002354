@@ -1,0 +1,744 @@
+// Агрегації для GET /api/adm/dashboard.
+//
+// Принцип: усе рахує MongoDB. У Node не приїжджає жодного сирого замовлення —
+// лише готові числа й короткі списки. Інакше на кожне відкриття дашборду
+// довелось би тягнути всю колекцію Order.
+//
+// Колекція невелика (тисячі документів), тож пайплайни свідомо прості й
+// читабельні, без індексів під кожен блок.
+
+const TIME_ZONE = 'Europe/Kyiv';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Замовлення, які не рахуються у виторг. Скасоване замовлення — це не продаж,
+// і показувати його в revenue/середньому чеку означало б брехати власнику.
+const { ORDER_STATUS } = require('./orderStatus');
+
+const CANCELLED_STATUS = ORDER_STATUS.CANCELLED;
+
+// ─── Періоди ───────────────────────────────────────────────────────────────
+
+// Зміщення київського часу відносно UTC на конкретний момент (з урахуванням
+// переходу на літній час). Render працює в UTC, а "сьогодні" для магазину —
+// це київська доба, не UTC-доба.
+function kyivOffsetMs(date) {
+  const utc = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const kyiv = new Date(date.toLocaleString('en-US', { timeZone: TIME_ZONE }));
+
+  return kyiv.getTime() - utc.getTime();
+}
+
+// Початок київської доби для переданого моменту, повернутий як UTC-Date.
+function startOfKyivDay(date) {
+  const offset = kyivOffsetMs(date);
+  const shifted = new Date(date.getTime() + offset);
+  shifted.setUTCHours(0, 0, 0, 0);
+
+  return new Date(shifted.getTime() - offset);
+}
+
+// Рік і місяць у київському поясі.
+function kyivMonthParts(date) {
+  const shifted = new Date(date.getTime() + kyivOffsetMs(date));
+
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() };
+}
+
+// Початок київського місяця як UTC-Date. Date.UTC сам нормалізує вихід за межі
+// року, тож month = -1 чи 12 дає грудень попереднього / січень наступного.
+//
+// Зсув рахується двічі: спершу орієнтовний за наївною датою, потім уточнений
+// уже за отриманим моментом — між серединою місяця і його першим числом може
+// пролягати перехід на літній час, і одноразовий розрахунок давав би зсув на
+// годину.
+function startOfKyivMonth(year, month) {
+  const naive = Date.UTC(year, month, 1, 0, 0, 0, 0);
+  const approx = new Date(naive - kyivOffsetMs(new Date(naive)));
+
+  return new Date(naive - kyivOffsetMs(approx));
+}
+
+// Розбирає параметр month у форматі YYYY-MM. Повертає null, якщо формат чи
+// значення некоректні — контролер відповість 400, а не тихо покаже не той місяць.
+function parseMonthParam(raw) {
+  if (!raw) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})$/.exec(String(raw));
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+
+  if (month < 0 || month > 11 || year < 2000 || year > 2100) {
+    return null;
+  }
+
+  return { year, month };
+}
+
+// Повертає {from, to} поточного періоду і {from, to} попереднього такої ж
+// тривалості — саме з ним порівнюються картки пульсу.
+function resolvePeriod(period, fromRaw, toRaw, monthRaw) {
+  const now = new Date();
+  let from;
+  let to = now;
+  let shiftDays;
+
+  switch (period) {
+    case 'today':
+      from = startOfKyivDay(now);
+      shiftDays = 1;
+      break;
+    case 'week':
+      from = new Date(startOfKyivDay(now).getTime() - 6 * DAY_MS);
+      shiftDays = 7;
+      break;
+    case 'custom': {
+      const parsedFrom = new Date(fromRaw);
+      const parsedTo = new Date(toRaw);
+
+      if (Number.isNaN(parsedFrom.getTime()) || Number.isNaN(parsedTo.getTime())) {
+        return null;
+      }
+
+      from = startOfKyivDay(parsedFrom);
+      // to включно: беремо початок наступної доби після вказаної.
+      to = new Date(startOfKyivDay(parsedTo).getTime() + DAY_MS);
+      shiftDays = Math.max(1, Math.round((to.getTime() - from.getTime()) / DAY_MS));
+      break;
+    }
+    case 'month':
+    default: {
+      // Календарний місяць, а не ковзні 30 днів: власник мислить місяцями
+      // («скільки було в липні»), і межа, що повзе разом із сьогоднішньою
+      // датою, робить сусідні відкриття дашборду непорівнюваними.
+      //
+      // Без параметра — поточний місяць; із month=YYYY-MM — будь-який інший.
+      const explicit = parseMonthParam(monthRaw);
+
+      if (monthRaw && !explicit) {
+        return null;
+      }
+
+      const parts = explicit || kyivMonthParts(now);
+      from = startOfKyivMonth(parts.year, parts.month);
+      const nextMonth = startOfKyivMonth(parts.year, parts.month + 1);
+      // Поточний місяць ще не скінчився — обрізаємо по «зараз».
+      to = new Date(Math.min(now.getTime(), nextMonth.getTime()));
+
+      const previousStart = startOfKyivMonth(parts.year, parts.month - 1);
+
+      // Порівнюємо з ТАКОЮ САМОЮ частиною попереднього місяця, а не з усім
+      // ним: 7 днів вересня проти повного серпня показували б обвал на 70%,
+      // якого немає. Для завершеного місяця обрізання нічого не змінює —
+      // виходить повний попередній місяць.
+      return {
+        from,
+        to,
+        previous: {
+          from: previousStart,
+          to: new Date(
+            Math.min(
+              from.getTime(),
+              previousStart.getTime() + (to.getTime() - from.getTime())
+            )
+          ),
+        },
+      };
+    }
+  }
+
+  // Попередній період зсуваємо на ЦІЛУ кількість діб, а не на тривалість
+  // вікна. Для "сьогодні" це дає вчора до тієї ж години — те порівняння, якого
+  // очікує людина. Зсув на тривалість (16 год) натомість зіставляв би ранок
+  // сьогодні з вечором учора, і числа стрибали б залежно від часу відкриття.
+  const shiftMs = shiftDays * DAY_MS;
+
+  return {
+    from,
+    to,
+    previous: {
+      from: new Date(from.getTime() - shiftMs),
+      to: new Date(to.getTime() - shiftMs),
+    },
+  };
+}
+
+// ─── Дрібні утиліти ────────────────────────────────────────────────────────
+
+// Відсоток зміни до попереднього періоду. null (а не 0) означає "нема з чим
+// порівнювати" — фронт має показати прочерк, а не «+0%», бо це різні речі.
+function percentChange(current, previous) {
+  if (!previous) {
+    return current ? null : 0;
+  }
+
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+// Ключ клієнта: email, а якщо його немає — телефон. Окремої колекції клієнтів
+// для замовлень немає (гості оформлюють без реєстрації), тож групуємо по тому,
+// що реально є в замовленні.
+const CUSTOMER_KEY = {
+  $toLower: {
+    $trim: { chars: ' ', input: { $ifNull: ['$email', { $ifNull: ['$tel', ''] }] } },
+  },
+};
+
+// Сума позиції кошика. cartItems не має схеми — ні Joi, ні Mongoose не
+// описують форму товару, — тому будь-яке поле може бути відсутнім або
+// рядком (price у типах фронту прямо оголошений як number | string).
+// Звідси $convert з onError/onNull: одне зіпсоване легасі-значення інакше
+// поклало б увесь дашборд, а не одну позицію.
+const toNumber = value => ({ $convert: { input: value, to: 'double', onError: 0, onNull: 0 } });
+
+// Шлях передається параметром, бо та сама сума потрібна двічі: для позиції
+// після $unwind ('$cartItems') і для кожного елемента всередині $map ('$$item').
+const itemSum = path => ({
+  $let: {
+    vars: {
+      total: toNumber(`${path}.totalPrice`),
+      fallback: {
+        $multiply: [toNumber(`${path}.price`), toNumber({ $ifNull: [`${path}.quantityOrdered`, 1] })],
+      },
+    },
+    in: { $cond: [{ $gt: ['$$total', 0] }, '$$total', '$$fallback'] },
+  },
+});
+
+const ITEM_SUM = itemSum('$cartItems');
+
+const paidMatch = (from, to) => ({
+  createdAt: { $gte: from, $lt: to },
+  status: { $ne: CANCELLED_STATUS },
+});
+
+// ─── Пульс ─────────────────────────────────────────────────────────────────
+
+async function aggregateTotals(Order, from, to) {
+  const [row] = await Order.aggregate([
+    { $match: paidMatch(from, to) },
+    {
+      $group: {
+        _id: null,
+        revenue: { $sum: toNumber('$together') },
+        ordersCount: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const revenue = row ? row.revenue : 0;
+  const ordersCount = row ? row.ordersCount : 0;
+
+  return {
+    revenue,
+    ordersCount,
+    avgCheck: ordersCount ? Math.round(revenue / ordersCount) : 0,
+  };
+}
+
+// Середній час обробки. Період міряємо по ДАТІ ДОСТАВКИ, а не створення:
+// показник відповідає на питання «як швидко ми віддаємо замовлення зараз».
+// Замовлення без deliveredAt (доставлені до появи поля) не враховуються.
+async function aggregateProcessingTime(Order, from, to) {
+  const [row] = await Order.aggregate([
+    { $match: { deliveredAt: { $ne: null, $gte: from, $lt: to } } },
+    {
+      $group: {
+        _id: null,
+        avgMs: { $avg: { $subtract: ['$deliveredAt', '$createdAt'] } },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  if (!row || !row.count) {
+    return { hours: null, count: 0 };
+  }
+
+  return { hours: Math.round((row.avgMs / (60 * 60 * 1000)) * 10) / 10, count: row.count };
+}
+
+// ─── Тривоги ───────────────────────────────────────────────────────────────
+
+// Замовлення вважається застряглим, якщо провисіло в «Нове» довше доби.
+// Було три дні — на практиці це надто пізно: клієнт устигає передумати.
+const STUCK_AFTER_HOURS = 24;
+// Онлайн-оплату не позначаємо проблемною одразу: клієнт може бути на сторінці
+// банку просто зараз.
+const UNPAID_AFTER_HOURS = 2;
+
+async function aggregateStuckOrders(Order) {
+  const threshold = new Date(Date.now() - STUCK_AFTER_HOURS * 60 * 60 * 1000);
+
+  return Order.aggregate([
+    { $match: { status: ORDER_STATUS.NEW, createdAt: { $lt: threshold } } },
+    { $sort: { createdAt: 1 } },
+    { $limit: 20 },
+    {
+      $project: {
+        _id: 1,
+        numberOfOrder: 1,
+        customer: { $concat: [{ $ifNull: ['$lastName', ''] }, ' ', { $ifNull: ['$firstName', ''] }] },
+        together: 1,
+        createdAt: 1,
+        daysWaiting: {
+          $floor: { $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, DAY_MS] },
+        },
+        // З добовим порогом самих лише днів мало: 25 і 47 годин обидва
+        // показувались би як «1 день». Години дають UI змогу написати точніше.
+        hoursWaiting: {
+          $floor: {
+            $divide: [{ $subtract: ['$$NOW', '$createdAt'] }, 60 * 60 * 1000],
+          },
+        },
+      },
+    },
+  ]);
+}
+
+// Неоплачені онлайн-замовлення: рахунок створено, але success так і не настав.
+async function aggregateUnpaidOnline(Order) {
+  const threshold = new Date(Date.now() - UNPAID_AFTER_HOURS * 60 * 60 * 1000);
+
+  return Order.aggregate([
+    {
+      $match: {
+        payment: 'card_online',
+        status: { $ne: CANCELLED_STATUS },
+        createdAt: { $lt: threshold },
+        acquiringStatus: { $nin: ['success', null] },
+      },
+    },
+    { $sort: { createdAt: -1 } },
+    { $limit: 20 },
+    {
+      $project: {
+        _id: 1,
+        numberOfOrder: 1,
+        customer: { $concat: [{ $ifNull: ['$lastName', ''] }, ' ', { $ifNull: ['$firstName', ''] }] },
+        together: 1,
+        acquiringStatus: 1,
+        acquiringFailureReason: 1,
+        createdAt: 1,
+      },
+    },
+  ]);
+}
+
+// Товари, що закінчуються. quantity === 0 свідомо не показуємо: вони вже
+// закінчились, це інша задача (закупівля), а не сигнал «встигни докупити».
+// Збірки лежать в окремій колекції, але для власника це той самий склад.
+async function aggregateLowStock(Product, ProductZbirky) {
+  const match = { quantity: { $gt: 0, $lt: 5 } };
+  const project = { _id: 1, codeOfGood: 1, name: 1, quantity: 1, category: 1 };
+
+  const [products, assemblies] = await Promise.all([
+    Product.find(match, project).sort({ quantity: 1 }).limit(20).lean(),
+    ProductZbirky.find(match, project).sort({ quantity: 1 }).limit(20).lean(),
+  ]);
+
+  return [...products, ...assemblies]
+    .sort((a, b) => a.quantity - b.quantity)
+    .slice(0, 20);
+}
+
+// ─── Замовлення в роботі ───────────────────────────────────────────────────
+
+// «В роботі» тепер визначається від протилежного: усе, що НЕ доставлене й НЕ
+// скасоване. Перелік проміжних статусів залежить від способу оплати й з часом
+// змінюватиметься — білий список довелося б правити при кожній такій зміні,
+// і блок мовчки переставав би показувати частину замовлень.
+async function aggregateOrdersInWork(Order, limit = 15) {
+  return Order.aggregate([
+    { $match: { status: { $nin: [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED] } } },
+    { $sort: { createdAt: -1 } },
+    { $limit: limit },
+    {
+      $project: {
+        _id: 1,
+        numberOfOrder: 1,
+        customer: { $concat: [{ $ifNull: ['$lastName', ''] }, ' ', { $ifNull: ['$firstName', ''] }] },
+        together: 1,
+        payment: 1,
+        status: 1,
+        createdAt: 1,
+        acquiringStatus: 1,
+        // Причина відмови потрібна вже тут: без неї бейдж у списку показував
+        // би «Оплата не пройшла: причина невідома» при відомій причині.
+        acquiringFailureReason: 1,
+        monopayState: 1,
+        monopaySubState: 1,
+      },
+    },
+  ]);
+}
+
+// ─── Клієнти ───────────────────────────────────────────────────────────────
+
+const WHOLESALE_MIN_ORDERS = 3;
+const WHOLESALE_MIN_SUM = 50000;
+const WHOLESALE_WINDOW_DAYS = 30;
+
+// Профілі клієнтів-оптовиків.
+//
+// ⚠️ Оптовість — статус, який заробляється ОДИН РАЗ і більше не втрачається:
+// клієнт є оптовиком, якщо ХОЧ КОЛИСЬ мав >3 замовлень і >50 000 ₴ у межах
+// будь-якого 30-денного вікна. Раніше статус перераховувався у вікні перед
+// останнім замовленням, і це давало систематично хибний результат: перед тим,
+// як зникнути, клієнт майже завжди зменшує темп, тож в останньому вікні
+// порогу вже не було — і найцінніші «зниклі оптовики» просто не потрапляли
+// у вибірку.
+//
+// Вікна будуються від кожного замовлення вперед на 30 днів. Замовлень на
+// одного клієнта — десятки, тож квадратична перевірка тут безпечна.
+async function aggregateWholesaleCustomers(Order, from, to) {
+  const rows = await Order.aggregate([
+    { $match: { status: { $ne: CANCELLED_STATUS } } },
+    {
+      $group: {
+        _id: CUSTOMER_KEY,
+        orders: { $push: { createdAt: '$createdAt', together: toNumber('$together') } },
+        lastOrderAt: { $max: '$createdAt' },
+        firstName: { $last: '$firstName' },
+        lastName: { $last: '$lastName' },
+        email: { $last: '$email' },
+        tel: { $last: '$tel' },
+      },
+    },
+    { $match: { _id: { $ne: '' } } },
+    {
+      $addFields: {
+        qualifyingWindows: {
+          $filter: {
+            input: {
+              $map: {
+                input: '$orders',
+                as: 'anchor',
+                in: {
+                  $let: {
+                    vars: {
+                      window: {
+                        $filter: {
+                          input: '$orders',
+                          as: 'order',
+                          cond: {
+                            $and: [
+                              { $gte: ['$$order.createdAt', '$$anchor.createdAt'] },
+                              {
+                                $lt: [
+                                  '$$order.createdAt',
+                                  {
+                                    $add: [
+                                      '$$anchor.createdAt',
+                                      WHOLESALE_WINDOW_DAYS * DAY_MS,
+                                    ],
+                                  },
+                                ],
+                              },
+                            ],
+                          },
+                        },
+                      },
+                    },
+                    in: {
+                      count: { $size: '$$window' },
+                      sum: { $sum: '$$window.together' },
+                    },
+                  },
+                },
+              },
+            },
+            as: 'window',
+            cond: {
+              $and: [
+                { $gt: ['$$window.count', WHOLESALE_MIN_ORDERS] },
+                { $gt: ['$$window.sum', WHOLESALE_MIN_SUM] },
+              ],
+            },
+          },
+        },
+        // Замовлення всередині вибраного періоду — потрібні, щоб зрозуміти,
+        // чи клієнт мовчав саме в цьому періоді.
+        ordersInPeriod: {
+          $filter: {
+            input: '$orders',
+            as: 'order',
+            cond: {
+              $and: [
+                { $gte: ['$$order.createdAt', from] },
+                { $lt: ['$$order.createdAt', to] },
+              ],
+            },
+          },
+        },
+        // Усе, що було ДО кінця періоду. Потрібне, щоб рахувати мовчання
+        // станом на кінець періоду, а не на сьогодні: у виборі за липень
+        // важливо, скільки клієнт мовчав ТОДІ, а не скільки минуло відтоді.
+        ordersBeforePeriodEnd: {
+          $filter: {
+            input: '$orders',
+            as: 'order',
+            cond: { $lt: ['$$order.createdAt', to] },
+          },
+        },
+      },
+    },
+    { $match: { 'qualifyingWindows.0': { $exists: true } } },
+    {
+      $addFields: {
+        lastOrderBeforePeriodEnd: { $max: '$ordersBeforePeriodEnd.createdAt' },
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        tel: 1,
+        lastOrderAt: 1,
+        lastOrderBeforePeriodEnd: 1,
+        ordersInPeriodCount: { $size: '$ordersInPeriod' },
+        totalSum: { $sum: '$orders.together' },
+        ordersCount: { $size: '$orders' },
+        daysSilentAtPeriodEnd: {
+          $cond: [
+            { $ifNull: ['$lastOrderBeforePeriodEnd', false] },
+            {
+              $floor: {
+                $divide: [
+                  { $subtract: [to, '$lastOrderBeforePeriodEnd'] },
+                  DAY_MS,
+                ],
+              },
+            },
+            null,
+          ],
+        },
+      },
+    },
+  ]);
+
+  return rows;
+}
+
+// Оптовики, які мовчали у ВИБРАНОМУ періоді.
+//
+// Прив'язка до періоду — свідома: розділ мусить відповідати на питання «хто з
+// оптовиків нічого не купив за цей місяць», і тому реагувати на фільтр угорі.
+// Жорсткого вікна «20–60 днів» більше немає: воно ховало саме тих, хто зник
+// давно, хоча це найсильніший сигнал зателефонувати. Давність показуємо
+// числом, щоб було видно різницю між «місяць тому» і «рік тому».
+function selectInactiveWholesale(customers, limit = 10) {
+  return customers
+    .filter(
+      customer =>
+        // Жодного замовлення в періоді — і при цьому клієнт існував ДО його
+        // кінця. Перевірка на lastOrderAt < from була б помилкою: клієнт, який
+        // мовчав у липні, але повернувся в серпні, у вибірці за липень має
+        // бути — саме тоді він і зникав.
+        customer.ordersInPeriodCount === 0 && customer.lastOrderBeforePeriodEnd
+    )
+    .sort((a, b) => b.daysSilentAtPeriodEnd - a.daysSilentAtPeriodEnd)
+    .slice(0, limit)
+    .map(customer => ({
+      key: customer._id,
+      name: `${customer.lastName || ''} ${customer.firstName || ''}`.trim(),
+      email: customer.email,
+      tel: customer.tel,
+      daysSilent: customer.daysSilentAtPeriodEnd,
+      lastOrderAt: customer.lastOrderBeforePeriodEnd,
+      totalSum: customer.totalSum,
+      ordersCount: customer.ordersCount,
+    }));
+}
+
+async function aggregateTopCustomers(Order, from, to, wholesaleKeys, limit = 8) {
+  const rows = await Order.aggregate([
+    { $match: paidMatch(from, to) },
+    {
+      $group: {
+        _id: CUSTOMER_KEY,
+        totalSum: { $sum: toNumber('$together') },
+        ordersCount: { $sum: 1 },
+        firstName: { $last: '$firstName' },
+        lastName: { $last: '$lastName' },
+        email: { $last: '$email' },
+        tel: { $last: '$tel' },
+      },
+    },
+    { $match: { _id: { $ne: '' } } },
+    { $sort: { totalSum: -1 } },
+    { $limit: limit },
+  ]);
+
+  return rows.map(row => ({
+    key: row._id,
+    name: `${row.lastName || ''} ${row.firstName || ''}`.trim(),
+    email: row.email,
+    tel: row.tel,
+    totalSum: row.totalSum,
+    ordersCount: row.ordersCount,
+    isWholesale: wholesaleKeys.has(row._id),
+  }));
+}
+
+// Нові (перше в житті замовлення потрапило в цей період) проти повторних.
+async function aggregateNewVsReturning(Order, from, to) {
+  const rows = await Order.aggregate([
+    { $match: { status: { $ne: CANCELLED_STATUS } } },
+    {
+      $group: {
+        _id: CUSTOMER_KEY,
+        firstOrderAt: { $min: '$createdAt' },
+        inPeriod: {
+          $sum: { $cond: [{ $and: [{ $gte: ['$createdAt', from] }, { $lt: ['$createdAt', to] }] }, 1, 0] },
+        },
+      },
+    },
+    { $match: { _id: { $ne: '' }, inPeriod: { $gt: 0 } } },
+    {
+      $group: {
+        _id: null,
+        newCustomers: { $sum: { $cond: [{ $gte: ['$firstOrderAt', from] }, 1, 0] } },
+        returningCustomers: { $sum: { $cond: [{ $lt: ['$firstOrderAt', from] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const row = rows[0] || {};
+
+  return {
+    newCustomers: row.newCustomers || 0,
+    returningCustomers: row.returningCustomers || 0,
+  };
+}
+
+// ─── Аналітика ─────────────────────────────────────────────────────────────
+
+// Виторг за категоріями. cartItems зберігає ВЕСЬ документ товару, тож category
+// лежить прямо в позиції — джойн до Product не потрібен.
+//
+// ⚠️ Знижка (промокод і ручна) живе на РІВНІ ЗАМОВЛЕННЯ, а не позиції:
+// `together` = сума позицій − discountValue. Тому проста сума позицій дає
+// валовий виторг і не сходиться з числом у «Пульсі». На реальних даних вересня
+// 2026 це давало 103 370 ₴ за категоріями проти 98 580 ₴ обороту — рівно
+// 4 790 ₴ ручних знижок по п'яти замовленнях.
+//
+// Знижку неможливо коректно віднести до однієї категорії, тож розподіляємо її
+// між позиціями пропорційно їхній валовій сумі: кожна позиція дає
+// gross × (together / itemsGross). Сума категорій після цього збігається з
+// виторгом до копійок.
+async function aggregateRevenueByCategory(Order, from, to) {
+  const rows = await Order.aggregate([
+    { $match: paidMatch(from, to) },
+    // Валова сума позицій — знаменник розподілу. Рахується ДО $unwind, поки
+    // кошик ще цілий.
+    {
+      $addFields: {
+        itemsGross: {
+          $sum: {
+            $map: { input: { $ifNull: ['$cartItems', []] }, as: 'item', in: itemSum('$$item') },
+          },
+        },
+      },
+    },
+    { $unwind: '$cartItems' },
+    {
+      $group: {
+        _id: { $ifNull: ['$cartItems.category', 'Інше'] },
+        revenue: {
+          $sum: {
+            $let: {
+              vars: { gross: ITEM_SUM, paid: toNumber('$together') },
+              in: {
+                // Ділення захищене нулем у знаменнику. Замовлення з `together`
+                // = 0 (є одне легасі, #100004) свідомо дає нуль і тут: «Пульс»
+                // рахує його як нульовий виторг, тож у категоріях воно теж має
+                // важити нуль — інакше сума категорій знову розійдеться з
+                // оборотом, а саме заради збігу все це й робиться.
+                $cond: [
+                  { $gt: ['$itemsGross', 0] },
+                  { $multiply: ['$$gross', { $divide: ['$$paid', '$itemsGross'] }] },
+                  0,
+                ],
+              },
+            },
+          },
+        },
+        itemsCount: { $sum: toNumber({ $ifNull: ['$cartItems.quantityOrdered', 1] }) },
+      },
+    },
+    { $sort: { revenue: -1 } },
+    { $limit: 12 },
+  ]);
+
+  return rows.map(row => ({
+    category: row._id || 'Інше',
+    revenue: Math.round(row.revenue),
+    itemsCount: row.itemsCount,
+  }));
+}
+
+async function aggregatePaymentMethods(Order, from, to) {
+  const rows = await Order.aggregate([
+    { $match: paidMatch(from, to) },
+    {
+      $group: {
+        _id: { $ifNull: ['$payment', 'Не вказано'] },
+        ordersCount: { $sum: 1 },
+        revenue: { $sum: toNumber('$together') },
+      },
+    },
+    { $sort: { ordersCount: -1 } },
+  ]);
+
+  return rows.map(row => ({
+    payment: row._id,
+    ordersCount: row.ordersCount,
+    revenue: row.revenue,
+  }));
+}
+
+// Виторг по днях — для лінії тренду. Дата групується в київському поясі,
+// інакше вечірні замовлення падали б у наступну добу.
+async function aggregateRevenueByDay(Order, from, to) {
+  const rows = await Order.aggregate([
+    { $match: paidMatch(from, to) },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: TIME_ZONE } },
+        revenue: { $sum: toNumber('$together') },
+        ordersCount: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+
+  return rows.map(row => ({ date: row._id, revenue: row.revenue, ordersCount: row.ordersCount }));
+}
+
+module.exports = {
+  TIME_ZONE,
+  resolvePeriod,
+  percentChange,
+  aggregateTotals,
+  aggregateProcessingTime,
+  aggregateStuckOrders,
+  aggregateUnpaidOnline,
+  aggregateLowStock,
+  aggregateOrdersInWork,
+  aggregateWholesaleCustomers,
+  selectInactiveWholesale,
+  aggregateTopCustomers,
+  aggregateNewVsReturning,
+  aggregateRevenueByCategory,
+  aggregatePaymentMethods,
+  aggregateRevenueByDay,
+};
