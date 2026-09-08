@@ -344,12 +344,6 @@ const getOrders = async (req, res) => {
           deliveryType: order.deliveryType,
           city: order.city,
           warehouse: order.warehouse,
-          // ttn і prepaymentAmount свідомо в списку, а не лише в get-order:
-          // адмінка шле весь об'єкт замовлення назад в update, і поля, яких у
-          // списку немає, доводиться доклеювати руками в кожному обробнику.
-          // Заразом ТТН видно прямо в переліку, без заходу в картку.
-          ttn: order.ttn,
-          prepaymentAmount: order.prepaymentAmount,
           payment: order.payment,
           payParts: order.payParts,
           monopayState: order.monopayState,
