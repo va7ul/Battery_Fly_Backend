@@ -33,6 +33,10 @@ router.get('/feedback', authAdm, ctrl.getFeedback);
 router.put('/put-order/:id', authAdm, ctrl.updateOrderById);
 router.get('/dashboard', authAdm, ctrl.getDashboard);
 router.get('/order-message/:numberOfOrder', authAdm, ctrl.getOrderMessage);
+router.get('/counters', authAdm, ctrl.getCounters);
+router.patch('/orders/:numberOfOrder/viewed', authAdm, ctrl.markOrderViewed);
+router.patch('/print3d/:id/viewed', authAdm, ctrl.markPrint3dViewed);
+router.patch('/feedback/:id/viewed', authAdm, ctrl.markFeedbackViewed);
 router.get('/settings', authAdm, ctrl.getShopSettings);
 router.put('/settings', authAdm, ctrl.updateShopSettings);
 

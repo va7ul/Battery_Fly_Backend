@@ -259,6 +259,16 @@ const orderSchema = new Schema(
             type: Boolean,
             default: false,
         },
+        // Чи бачив менеджер цей запис. Живе на СЕРВЕРІ, а не в браузері:
+        // попереднє рішення тримало "побачено" в localStorage, тож рефреш,
+        // інший пристрій чи другий менеджер бачили різне.
+        //
+        // Раз true — назавжди true: нове надходження — це НОВИЙ запис із
+        // default false, наявний ніхто не «розпереглядає».
+        isViewed: {
+            type: Boolean,
+            default: false,
+        },
 
     },
     { versionKey: false, timestamps: true }

@@ -362,6 +362,7 @@ const getOrders = async (req, res) => {
           acquiringModifiedDate: order.acquiringModifiedDate,
           createdAt: order.createdAt,
           status: order.status,
+          isViewed: order.isViewed,
         };
         })
         
@@ -696,7 +697,8 @@ const getFeedback = async (req, res) => {
       tel: i.tel,
       comment: i.comment,
       createdAt: i.createdAt,
-      updatedAt: i.updatedAt
+      updatedAt: i.updatedAt,
+      isViewed: i.isViewed
     }
   })
 
@@ -1045,6 +1047,81 @@ const updateShopSettings = async (req, res) => {
   res.status(200).json({ result: toPlainSettings(settings) });
 };
 
+
+// Лічильники непереглянутого: скільки замовлень, заявок на 3D-друк і заявок
+// зі форми зв'язку менеджер ще не відкривав.
+//
+// Умова — { $ne: true }, а не { isViewed: false }. У MongoDB запис, де поля
+// взагалі НЕМАЄ, під `false` не підпадає: старі записи (до появи поля) тихо
+// випали б із підрахунку, а в списках адмінки при цьому світились би як нові —
+// цифра й екран розійшлись би. `$ne: true` означає буквально «ще не
+// переглянуто» і працює однаково до й після разового скрипта.
+const UNVIEWED = { isViewed: { $ne: true } };
+
+const getCounters = async (req, res) => {
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const [orders, print3d, feedback] = await Promise.all([
+    Order.countDocuments(UNVIEWED),
+    Print3dOrder.countDocuments(UNVIEWED),
+    FeedBack.countDocuments(UNVIEWED),
+  ]);
+
+  res.status(200).json({
+    result: { orders, print3d, feedback },
+  });
+};
+
+// Позначити переглянутим. Три ручки замість side-effect у GET-контролерах:
+// читання не має мовчки писати в базу — інакше будь-який перезапит списку чи
+// відкриття картки з іншою метою (лист, перевірка ТТН) знімало б позначку
+// «нове», і менеджер втрачав би записи, яких насправді не бачив.
+//
+// Ідемпотентні: повторний виклик просто ще раз ставить true.
+const markViewed = (Model, buildFilter) => async (req, res) => {
+  const { token } = req.user;
+
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const record = await Model.findOneAndUpdate(
+    buildFilter(req.params),
+    { $set: { isViewed: true } },
+    { new: true }
+  );
+
+  if (!record) {
+    throw HttpError(404, 'Not found');
+  }
+
+  res.status(200).json({
+    result: { _id: record._id, isViewed: record.isViewed },
+  });
+};
+
+// Замовлення адресуються номером — саме він у маршруті адмінки
+// (/admin/orders/:orderId) і в get-order/:id.
+const markOrderViewed = markViewed(Order, params => ({
+  numberOfOrder: params.numberOfOrder,
+}));
+
+const markPrint3dViewed = markViewed(Print3dOrder, params => ({
+  _id: params.id,
+}));
+
+const markFeedbackViewed = markViewed(FeedBack, params => ({
+  _id: params.id,
+}));
+
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -1077,6 +1154,10 @@ module.exports = {
   getOrderMessage: ctrlWrapper(getOrderMessage),
   getShopSettings: ctrlWrapper(getShopSettings),
   updateShopSettings: ctrlWrapper(updateShopSettings),
+  getCounters: ctrlWrapper(getCounters),
+  markOrderViewed: ctrlWrapper(markOrderViewed),
+  markPrint3dViewed: ctrlWrapper(markPrint3dViewed),
+  markFeedbackViewed: ctrlWrapper(markFeedbackViewed),
 
 
 
