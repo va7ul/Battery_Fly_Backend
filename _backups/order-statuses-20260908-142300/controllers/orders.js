@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder, calculatePrepayment } = require('../helpers');
+const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder } = require('../helpers');
 const { NOVA_POST, MAIL_USER } = process.env;
 
 const axios = require('axios');
@@ -98,10 +98,7 @@ const addOrder = async (req, res) => {
         deliveryType, 
         city, 
         warehouse, 
-        payment,
-        // Передоплата актуальна лише для накладеного платежу — для решти
-        // способів хелпер поверне null.
-        prepaymentAmount: calculatePrepayment(payment, together)
+        payment
     }
     const order = await Order.create({ ...finalyOrder })
 
