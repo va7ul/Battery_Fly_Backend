@@ -8,7 +8,6 @@ const {
   cloudImageProduct,
   ORDER_STATUS,
   isTransitionAllowed,
-  calculatePrepayment,
   getSettings: loadSettings,
   toPlainSettings,
   getAllTemplateKeys,
@@ -340,10 +339,6 @@ const getOrders = async (req, res) => {
           promoCode: order.promoCode,
           promoCodeDiscount: order.promoCodeDiscount,
           discountValue: order.discountValue,
-          // Ручна знижка — щоб список і картка не розходились: зі списку теж
-          // можна зробити крок статусу, і він шле замовлення назад цілком.
-          personalDiscountRate: order.personalDiscountRate,
-          personalDiscountValue: order.personalDiscountValue,
           together: order.together,
           cartItems: order.cartItems,
           deliveryType: order.deliveryType,
@@ -785,41 +780,6 @@ const updateOrderById = async (req, res) => {
   const updateFields = { ...req.body };
   delete updateFields.deliveredAt;
   delete updateFields.stockDeducted;
-
-  // Передоплата перераховується, коли змінилась САМА СУМА замовлення.
-  //
-  // prepaymentAmount рахувався один раз — при створенні замовлення. Менеджер
-  // же вносить ручну знижку вже в картці, і після неї передоплата лишалась від
-  // старої суми: замовлення на 12 645 ₴ зі знижкою до 10 000 ₴ показувало
-  // «передоплата 2 529 ₴ (20% від суми)», хоча 20% — це 2 000 ₴. Ця ж цифра
-  // їхала клієнту в готовому тексті повідомлення.
-  //
-  // ⚠️ Перераховуємо ТІЛЬКИ при зміні `together` і тільки поки замовлення ще
-  // не оплачене. Робити це на кожне збереження не можна: prepaymentAmount
-  // навмисно заморожений (див. models/order.js), щоб пізніша зміна відсотка в
-  // налаштуваннях не рухала суму в уже виставлених замовленнях. Тут сума
-  // змінилась — тож і передоплата від неї має змінитись.
-  const nextTogether = Number(updateFields.together);
-  const togetherChanged =
-    Number.isFinite(nextTogether) && nextTogether !== Number(current.together);
-  const stillEditable =
-    current.status === ORDER_STATUS.NEW ||
-    current.status === ORDER_STATUS.AWAITING_PAYMENT;
-
-  if (togetherChanged && stillEditable) {
-    const shopSettings = await loadSettings();
-
-    updateFields.prepaymentAmount = calculatePrepayment(
-      current.payment,
-      nextTogether,
-      shopSettings.prepaymentPercent
-    );
-  } else {
-    // Значення з тіла запиту не приймаємо взагалі: адмінка шле назад увесь
-    // об'єкт замовлення, і зайвий шлях, яким клієнт міг би переписати суму
-    // передоплати, тут не потрібен.
-    delete updateFields.prepaymentAmount;
-  }
 
   // ТТН обов'язковий саме на відправці: без номера цей статус не несе тієї
   // інформації, заради якої його вводили.
