@@ -12,9 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Замовлення, які не рахуються у виторг. Скасоване замовлення — це не продаж,
 // і показувати його в revenue/середньому чеку означало б брехати власнику.
-const { ORDER_STATUS } = require('./orderStatus');
-
-const CANCELLED_STATUS = ORDER_STATUS.CANCELLED;
+const CANCELLED_STATUS = 'Скасовано';
 
 // ─── Періоди ───────────────────────────────────────────────────────────────
 
@@ -277,7 +275,7 @@ async function aggregateStuckOrders(Order) {
   const threshold = new Date(Date.now() - STUCK_AFTER_HOURS * 60 * 60 * 1000);
 
   return Order.aggregate([
-    { $match: { status: ORDER_STATUS.NEW, createdAt: { $lt: threshold } } },
+    { $match: { status: 'Нове', createdAt: { $lt: threshold } } },
     { $sort: { createdAt: 1 } },
     { $limit: 20 },
     {
@@ -350,13 +348,9 @@ async function aggregateLowStock(Product, ProductZbirky) {
 
 // ─── Замовлення в роботі ───────────────────────────────────────────────────
 
-// «В роботі» тепер визначається від протилежного: усе, що НЕ доставлене й НЕ
-// скасоване. Перелік проміжних статусів залежить від способу оплати й з часом
-// змінюватиметься — білий список довелося б правити при кожній такій зміні,
-// і блок мовчки переставав би показувати частину замовлень.
 async function aggregateOrdersInWork(Order, limit = 15) {
   return Order.aggregate([
-    { $match: { status: { $nin: [ORDER_STATUS.DELIVERED, ORDER_STATUS.CANCELLED] } } },
+    { $match: { status: { $in: ['Нове', 'В роботі'] } } },
     { $sort: { createdAt: -1 } },
     { $limit: limit },
     {

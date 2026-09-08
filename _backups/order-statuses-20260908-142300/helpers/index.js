@@ -4,7 +4,6 @@ const sendEmail = require('./sendEmailNodemailer');
 const {cloudImageProduct} = require('./cloudinary');
 const removeFiles = require('./removeFiles');
 const { notifyNewOrder, notifyNewFeedback } = require('./telegram');
-const orderStatus = require('./orderStatus');
 
 module.exports = {
   HttpError,
@@ -13,6 +12,5 @@ module.exports = {
   cloudImageProduct,
   removeFiles,
   notifyNewOrder,
-  notifyNewFeedback,
-  ...orderStatus
+  notifyNewFeedback
 };
