@@ -11,8 +11,6 @@ const {
   getSettings: loadSettings,
   toPlainSettings,
   getAllTemplateKeys,
-  getTemplateKey,
-  renderTemplate,
 } = require('../helpers');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
@@ -924,53 +922,6 @@ const getDashboard = async (req, res) => {
 
 
 
-// Готовий текст повідомлення для клієнта: шаблон із налаштувань + підставлені
-// дані замовлення.
-//
-// Окремий endpoint, а не поле у відповіді на зміну статусу: той самий текст
-// потрібно показати ще й повторно, кнопкою в картці замовлення, без жодної
-// зміни статусу. Один маршрут обслуговує обидва випадки.
-//
-// Статус приходить ПАРАМЕТРОМ, а не читається з бази: адмінка запитує текст
-// одразу після збереження нового статусу, і покладатись на те, що запис уже
-// видно наступному читанню, — це гонка.
-const getOrderMessage = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
-
-  if (!order) {
-    throw HttpError(404, 'Order not found');
-  }
-
-  const status = req.query.status || order.status;
-  const templateKey = getTemplateKey(order.payment, status);
-
-  // Для «Нове» шаблону не існує — це не помилка, а нормальний стан: щойно
-  // створеному замовленню клієнту ще нічого повідомляти.
-  if (!templateKey) {
-    return res.status(200).json({ result: { message: null, status, templateKey: null } });
-  }
-
-  const settings = toPlainSettings(await loadSettings());
-  const template = settings.messageTemplates[templateKey];
-
-  if (!template) {
-    return res.status(200).json({ result: { message: null, status, templateKey } });
-  }
-
-  const message = renderTemplate(template, order, settings);
-
-  res.status(200).json({
-    result: { message: message || null, status, templateKey },
-  });
-};
-
 // Налаштування магазину. Документ один на всю базу; якщо його ще немає —
 // хелпер створює з дефолтами, тож розділ ніколи не відкривається порожнім.
 const getShopSettings = async (req, res) => {
@@ -1067,7 +1018,6 @@ module.exports = {
   getFeedback: ctrlWrapper(getFeedback),
   updateOrderById: ctrlWrapper(updateOrderById),
   getDashboard: ctrlWrapper(getDashboard),
-  getOrderMessage: ctrlWrapper(getOrderMessage),
   getShopSettings: ctrlWrapper(getShopSettings),
   updateShopSettings: ctrlWrapper(updateShopSettings),
 
