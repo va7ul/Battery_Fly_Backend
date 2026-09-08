@@ -32,7 +32,6 @@ router.delete('/promo-code/:id', authAdm, ctrl.deletePromocode);
 router.get('/feedback', authAdm, ctrl.getFeedback);
 router.put('/put-order/:id', authAdm, ctrl.updateOrderById);
 router.get('/dashboard', authAdm, ctrl.getDashboard);
-router.get('/order-message/:numberOfOrder', authAdm, ctrl.getOrderMessage);
 router.get('/settings', authAdm, ctrl.getShopSettings);
 router.put('/settings', authAdm, ctrl.updateShopSettings);
 
