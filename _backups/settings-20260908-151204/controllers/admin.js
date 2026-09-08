@@ -2,16 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const { SECRET_KEY } = process.env;
-const {
-  HttpError,
-  ctrlWrapper,
-  cloudImageProduct,
-  ORDER_STATUS,
-  isTransitionAllowed,
-  getSettings: loadSettings,
-  toPlainSettings,
-  getAllTemplateKeys,
-} = require('../helpers');
+const { HttpError, ctrlWrapper, cloudImageProduct, ORDER_STATUS, isTransitionAllowed } = require('../helpers');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -922,73 +913,6 @@ const getDashboard = async (req, res) => {
 
 
 
-// Налаштування магазину. Документ один на всю базу; якщо його ще немає —
-// хелпер створює з дефолтами, тож розділ ніколи не відкривається порожнім.
-const getShopSettings = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const settings = await loadSettings();
-
-  res.status(200).json({ result: toPlainSettings(settings) });
-};
-
-const updateShopSettings = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const settings = await loadSettings();
-  const { prepaymentPercent, requisites, messageTemplates } = req.body;
-
-  if (prepaymentPercent !== undefined) {
-    const percent = Number(prepaymentPercent);
-
-    // Відсоток бере участь у розрахунку грошей, тож перевіряємо тут, а не
-    // покладаємось на UI: адмінка на Netlify може відстати від бека.
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      throw HttpError(400, 'prepaymentPercent має бути числом від 0 до 100');
-    }
-
-    settings.prepaymentPercent = percent;
-  }
-
-  if (requisites !== undefined) {
-    if (typeof requisites !== 'string') {
-      throw HttpError(400, 'requisites має бути рядком');
-    }
-
-    settings.requisites = requisites;
-  }
-
-  if (messageTemplates !== undefined) {
-    if (typeof messageTemplates !== 'object' || messageTemplates === null) {
-      throw HttpError(400, 'messageTemplates має бути обʼєктом');
-    }
-
-    // Записуємо ЛИШЕ відомі ключі: інакше будь-яка помилка в адмінці засмічує
-    // документ полями, які ніхто ніколи не прочитає.
-    const allowed = new Set(getAllTemplateKeys());
-
-    Object.entries(messageTemplates).forEach(([key, value]) => {
-      if (allowed.has(key) && typeof value === 'string') {
-        settings.messageTemplates.set(key, value);
-      }
-    });
-  }
-
-  await settings.save();
-
-  res.status(200).json({ result: toPlainSettings(settings) });
-};
-
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -1018,8 +942,6 @@ module.exports = {
   getFeedback: ctrlWrapper(getFeedback),
   updateOrderById: ctrlWrapper(updateOrderById),
   getDashboard: ctrlWrapper(getDashboard),
-  getShopSettings: ctrlWrapper(getShopSettings),
-  updateShopSettings: ctrlWrapper(updateShopSettings),
 
 
 

@@ -5,9 +5,6 @@ const {cloudImageProduct} = require('./cloudinary');
 const removeFiles = require('./removeFiles');
 const { notifyNewOrder, notifyNewFeedback } = require('./telegram');
 const orderStatus = require('./orderStatus');
-const settings = require('./settings');
-const messageTemplates = require('./messageTemplates');
-const { renderTemplate, PLACEHOLDERS } = require('./renderTemplate');
 
 module.exports = {
   HttpError,
@@ -17,9 +14,5 @@ module.exports = {
   removeFiles,
   notifyNewOrder,
   notifyNewFeedback,
-  ...orderStatus,
-  ...settings,
-  ...messageTemplates,
-  renderTemplate,
-  PLACEHOLDERS
+  ...orderStatus
 };
