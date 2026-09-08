@@ -374,6 +374,15 @@ async function aggregateOrdersInWork(Order, limit = 15) {
         acquiringFailureReason: 1,
         monopayState: 1,
         monopaySubState: 1,
+        // Назва товару в рядку дашборду. Беремо ПЕРШУ позицію й окремо
+        // кількість позицій: у списку замовлень уже той самий підхід, і
+        // повний склад однаково відкривається в картці, куди веде клік.
+        //
+        // $arrayElemAt, а не $first: $first як оператор масиву з'явився лише в
+        // MongoDB 4.4, і на старішому сервері агрегація впала б цілком —
+        // разом з усім дашбордом, бо блоки рахуються одним Promise.all.
+        firstItemName: { $arrayElemAt: ['$cartItems.name', 0] },
+        itemsCount: { $size: { $ifNull: ['$cartItems', []] } },
       },
     },
   ]);
