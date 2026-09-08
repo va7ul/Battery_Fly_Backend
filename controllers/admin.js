@@ -1083,7 +1083,14 @@ const getCounters = async (req, res) => {
 // відкриття картки з іншою метою (лист, перевірка ТТН) знімало б позначку
 // «нове», і менеджер втрачав би записи, яких насправді не бачив.
 //
-// Ідемпотентні: повторний виклик просто ще раз ставить true.
+// Повертаємо alreadyViewed — стан ДО запису. Клієнт зменшує лічильник на
+// одиницю локально, не перезапитуючи /counters, і без цієї відповіді повторний
+// виклик по тому самому запису відняв би ще одиницю: у базі нічого не змінилось
+// би, а цифра в шапці поїхала. А повторний виклик — не рідкість: подвійний
+// клік, дві вкладки, StrictMode у дев-режимі React.
+//
+// Саме тому findOneAndUpdate БЕЗ { new: true } — так драйвер віддає документ
+// у стані до оновлення.
 const markViewed = (Model, buildFilter) => async (req, res) => {
   const { token } = req.user;
 
@@ -1093,18 +1100,21 @@ const markViewed = (Model, buildFilter) => async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const record = await Model.findOneAndUpdate(
+  const previous = await Model.findOneAndUpdate(
     buildFilter(req.params),
-    { $set: { isViewed: true } },
-    { new: true }
+    { $set: { isViewed: true } }
   );
 
-  if (!record) {
+  if (!previous) {
     throw HttpError(404, 'Not found');
   }
 
   res.status(200).json({
-    result: { _id: record._id, isViewed: record.isViewed },
+    result: {
+      _id: previous._id,
+      isViewed: true,
+      alreadyViewed: Boolean(previous.isViewed),
+    },
   });
 };
 
