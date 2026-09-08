@@ -83,28 +83,18 @@ function isTransitionAllowed(from, to, payment) {
 // Передоплата рахується лише для накладеного платежу: у решті випадків клієнт
 // платить усю суму одразу, і поле лишається null, а не нулем — нуль читався б
 // як «передоплата є, але нульова».
-//
-// Відсоток приходить АРГУМЕНТОМ, а не читається з бази всередині: інакше
-// функція стала б асинхронною й тягнула запит до Settings при кожному виклику,
-// зокрема у створенні замовлення. PREPAYMENT_PERCENT лишається запобіжником на
-// випадок, коли налаштувань ще немає.
-function calculatePrepayment(payment, together, percent = PREPAYMENT_PERCENT) {
+function calculatePrepayment(payment, together) {
   if (payment !== CASH_ON_DELIVERY) {
     return null;
   }
 
   const amount = Number(together);
-  const rate = Number(percent);
 
   if (!Number.isFinite(amount) || amount <= 0) {
     return null;
   }
 
-  if (!Number.isFinite(rate) || rate <= 0) {
-    return null;
-  }
-
-  return Math.round((amount * rate) / 100);
+  return Math.round((amount * PREPAYMENT_PERCENT) / 100);
 }
 
 module.exports = {

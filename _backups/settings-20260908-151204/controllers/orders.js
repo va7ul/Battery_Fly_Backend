@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder, calculatePrepayment, getSettings } = require('../helpers');
+const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder, calculatePrepayment } = require('../helpers');
 const { NOVA_POST, MAIL_USER } = process.env;
 
 const axios = require('axios');
@@ -82,8 +82,6 @@ const addOrder = async (req, res) => {
 
     const {userData:{firstName, lastName, email, text, tel}, total, cartItems, deliveryType, city, warehouse, payment, promoCode, promoCodeDiscount, discountValue, together} = req.body;
 
-    const shopSettings = await getSettings();
-
     const finalyOrder = {
         numberOfOrder,
         firstName, 
@@ -102,9 +100,8 @@ const addOrder = async (req, res) => {
         warehouse, 
         payment,
         // Передоплата актуальна лише для накладеного платежу — для решти
-        // способів хелпер поверне null. Відсоток редагується власником у
-        // налаштуваннях; find-or-create гарантує документ навіть на свіжій базі.
-        prepaymentAmount: calculatePrepayment(payment, together, shopSettings.prepaymentPercent)
+        // способів хелпер поверне null.
+        prepaymentAmount: calculatePrepayment(payment, together)
     }
     const order = await Order.create({ ...finalyOrder })
 
