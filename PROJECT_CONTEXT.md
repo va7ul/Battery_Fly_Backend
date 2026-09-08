@@ -128,6 +128,15 @@ Middleware-скорочення: **auth** = клієнтський JWT (`middlew
 | | GET `/quick-orders`, `/quick-order/:id` | authAdm | швидкі замовлення |
 | | GET `/users`, `/user/:id` | authAdm | клієнти |
 | | GET/POST/PUT/DELETE `/promo-codes`, `/promo-code`, `/promo-code/:id` | authAdm | промокоди |
+
+⚠️ **DELETE `/promo-code/:id` більше не блокується «Promocode in use».** Раніше
+`deletePromocode` шукав будь-якого користувача з цим кодом у `user.promoCodes` і кидав
+`500 'Promocode in use'` — тобто код ставав невидаляним НАЗАВЖДИ після першого ж
+застосування (з трьох кодів на проді два не видалялись узагалі). `user.promoCodes` — це
+історія використаних кодів, і потрібна вона рівно для одного: не дати клієнту застосувати
+той самий код двічі (`getPromoCode` у `controllers/orders.js`). Видалення коду її не
+ламає — назва просто лишається в історії, а знижки за нею вже не буде, бо самого коду
+немає.
 | | GET `/feedback` | authAdm | звернення |
 | | PUT `/put-order/:id` | authAdm | **зміна статусу замовлення** — шукає за `_id` (не `numberOfOrder`, на відміну від GET-роутів вище) |
 | | GET `/dashboard?period=…` | authAdm | агрегація для головної сторінки адмінки, один JSON — див. розділ 5.3 |

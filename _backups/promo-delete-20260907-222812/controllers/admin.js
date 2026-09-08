@@ -1,19 +1,9 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
+const { MAIL_USER } = process.env;
 const { SECRET_KEY } = process.env;
-const {
-  HttpError,
-  ctrlWrapper,
-  cloudImageProduct,
-  ORDER_STATUS,
-  isTransitionAllowed,
-  getSettings: loadSettings,
-  toPlainSettings,
-  getAllTemplateKeys,
-  getTemplateKey,
-  renderTemplate,
-} = require('../helpers');
+const { HttpError, ctrlWrapper, cloudImageProduct, sendEmail } = require('../helpers');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -604,15 +594,14 @@ const deletePromocode = async (req, res) => {
 
   const { id } = req.params;
 
-  // Раніше тут стояла заборона видаляти код, який уже є в user.promoCodes.
-  // Вона робила промокод невидаляним НАЗАВЖДИ після першого ж використання:
-  // з трьох кодів у базі два не можна було прибрати взагалі.
-  //
-  // user.promoCodes — це історія використаних кодів, потрібна рівно для
-  // одного: не дати клієнту застосувати той самий код двічі (див.
-  // getPromoCode в controllers/orders.js). Видалення коду цю історію не
-  // ламає — назва просто лишається в списку, а знижку за нею все одно вже
-  // ніхто не отримає, бо самого коду більше немає.
+  const promo = await PromoCode.findOne({ _id: id });
+  
+  const promoInUse = await User.findOne({ promoCodes: promo.name })
+  
+  if (promoInUse) {
+    throw HttpError(500, 'Promocode in use');
+  }
+ 
   const promoDelete = await PromoCode.findByIdAndDelete({_id: id});
 
   if (!promoDelete) {
@@ -703,113 +692,286 @@ const getFeedback = async (req, res) => {
   });
 }
 
-// Списання / повернення залишків.
-//
-// $inc, а не запис абсолютного значення. Стара версія рахувала
-// `item.quantity ± quantityOrdered`, де `item.quantity` приходило З ТІЛА
-// ЗАПИТУ — тобто залишок на момент, коли адмінка востаннє бачила товар.
-// При підтвердженні це ще працювало (адмінка перед тим підтягує свіжі
-// quantity), а от при скасуванні вона шле кошик як є, зі стоком на момент
-// ОФОРМЛЕННЯ замовлення. На тесті це давало 13 замість 10: товар з'являвся
-// з повітря. $inc змінює залишок відносно поточного значення в базі й не
-// залежить від того, що надіслав клієнт.
-const applyStockChange = async (cartItems, sign) => {
-  if (!Array.isArray(cartItems)) {
-    return;
-  }
-
-  for (const item of cartItems) {
-    const ordered = Number(item.quantityOrdered);
-
-    if (!Number.isFinite(ordered) || ordered <= 0) {
-      continue;
-    }
-
-    const delta = { $inc: { quantity: sign * ordered } };
-    const product = await Product.findOneAndUpdate({ _id: item._id }, delta, { new: true });
-
-    if (!product) {
-      await ProductZbirky.findOneAndUpdate({ _id: item._id }, delta, { new: true });
-    }
-  }
-};
-
-// Зміна замовлення з адмінки: статус, ТТН, ручна знижка, склад кошика.
-//
-// Статуси йдуть суворим конвеєром, і він РІЗНИЙ залежно від способу оплати
-// (див. helpers/orderStatus.js). Валідація стоїть тут, а не лише в UI:
-// адмінка на Netlify може відстати від бека на Render, а перестрибнутий
-// статус зіпсує і залишки на складі, і звітність дашборду.
 const updateOrderById = async (req, res) => {
-
+  
   const { token } = req.user;
-
+  
   const admin = await Admin.findOne({ token })
-
+    
   if (!admin) {
     throw HttpError(404, 'Not Found');
   }
 
-  // Поточний стан потрібен ДО оновлення: за ним перевіряємо дозволеність
-  // переходу і вирішуємо, чи вже списаний товар.
-  const current = await Order.findOne({ _id: req.params.id });
+  const today = new Date(Date.now());
+  const day = (`0${today.getDate()}`).slice(-2)
+  const month = (`0${today.getMonth() + 1}`).slice(-2)
+  const todayDate = (day + '.' + month + '.' + today.getFullYear());
+  
+  const { status, cartItems, email } = req.body;
 
-  if (!current) {
-    throw HttpError(404, 'Order not found');
+  if (status === "В роботі") {
+   
+
+    for (const item of cartItems) {
+      const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: item.quantity - item.quantityOrdered }, { new: true })
+      
+      if (!product) {
+        await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity - item.quantityOrdered) }, { new: true })
+      }
+    }
+
+    const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
+    
+    if (!order) {
+      throw HttpError(500, 'Internal server eror, write code in DB');
+    }
+    
+    const textEmail = {
+      from: MAIL_USER,
+      to: email,
+      subject: `Ваше замовлення №${order.numberOfOrder} прийнято в роботу`,
+      html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body style="width: 600px">
+  <p>
+      Дякуємо за покупку в магазині BatteryFly. Ваше замовлення отримане і
+      поступить в обробку найближчим часом.
+    </p>
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Деталі замовлення</b>
+      </caption>
+      <tr>
+        <td style="border-right: 1px solid rgb(160, 152, 152); padding: 5px">
+          <p style="margin: 0"><b>Номер замовлення: </b>${order.numberOfOrder}</p>
+          <p style="margin: 0"><b>Дата замовлення: </b>${todayDate}</p>
+          <p style="margin: 0">
+            <b>Спосіб оплати: </b>${order.payment}
+          </p>
+          <p style="margin: 0"><b>Спосіб доставки: </b>${order.deliveryType}</p>
+        </td>
+        <td style="padding: 5px">
+          <p style="margin: 0"><b>Е-mail: </b>${order.email}</p>
+          <p style="margin: 0"><b>Телефон: </b>${order.tel}</p>
+          <p style="margin: 0"><b>Статус замовлення: </b>В роботі</p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Реквізити для оплати</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0; padding: 15px 0">
+            <b>Отримувач</b><br />ФОП Солонинка Володимир Степанович
+          </p>
+          <p style="margin: 0">
+            <b>Рахунок отримувача</b><br />UA393003350000000260092385042
+          </p>
+          <p style="margin: 0; padding: 15px 0"><b>ІПН</b><br />3599611856</p>
+          <p style="margin: 0">
+            <b>Банк отримувач</b><br />ПАТ "Райффайзен Банк"
+          </p>
+          <p style="margin: 0; padding: 15px 0">
+            <b>Призначення платежу: </b>Оплата згідно рахунку №${order.numberOfOrder}
+            від ${day + '.' + month + '.' + today.getFullYear()}р.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      style="
+        border: 1px solid rgb(160, 152, 152);
+        margin-bottom: 30px;
+        max-width: 600px;
+        width: 600px;
+      "
+    >
+      <caption
+        style="
+          border: 1px solid rgb(160, 152, 152);
+          border-bottom: 0;
+          text-align: left;
+          padding: 2px 7px;
+          background-color: #9a969638;
+        "
+      >
+        <b>Адреса доставки</b>
+      </caption>
+      <tr>
+        <td style="padding: 5px">
+          <p style="margin: 0">${order.firstName + " " + order.lastName}</p>
+          <p style="margin: 0">
+            ${order.warehouse}
+          </p>
+          <p style="margin: 0">${order.city}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table
+      border="1"
+      style="
+        max-width: 600px;
+        border-collapse: collapse;
+        width: 600px;
+        margin-bottom: 30px;
+        border: 1px solid rgb(160, 152, 152);
+      "
+    >
+      <tr style="background-color: #9a969638">
+        <th style="padding: 5px">Товар</th>
+        <th style="padding: 5px">Код товару</th>
+        <th style="padding: 5px">Кількість</th>
+        <th style="padding: 5px">Ціна</th>
+        <th style="padding: 5px">Разом</th>
+      </tr>
+      ${cartItems.map(item => `<tr style="text-align: center">
+         <td style="text-align: left; padding: 5px">
+           ${item.name}
+         </td>
+         <td style="padding: 5px">${item.codeOfGood}</td>
+         <td style="padding: 5px">${item.quantityOrdered}</td>
+         <td style="padding: 5px">${item.price}<br /> грн</td>
+         <td style="padding: 5px">${item.totalPrice}<br /> грн</td>
+       </tr>`).join(" ")}
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px">Разом</td>
+        <td style="padding: 5px">
+          ${order.total}<br />
+          грн
+        </td>
+      </tr>
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px; color: #228b22">Знижка</td>
+        <td style="padding: 5px; color: #228b22">
+          ${order.discountValue}<br />
+          грн
+        </td>
+      </tr>
+      <tr style="text-align: center">
+        <td colspan="4" style="padding: 5px; background-color: #9a969638"><b>Сума до оплати</b></td>
+        <td style="padding: 5px; background-color: #9a969638">
+          <b>${order.together}</b><br />
+          <b>грн</b>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #ff0505">
+      <b
+        >При замовленні індивідуальної збірки за умови накладеного платежу -
+        передоплата 20%</b
+      >
+    </p>
+
+    <p>
+      Якщо у Вас виникли будь-які запитання, дайте відповідь на це повідомлення,
+      або звяжіться із нами за номером телефону який вказаний на сайті.
+    </p>
+    <hr />
+    <p>
+      Дякуємо за замовлення! <br />
+      З повагою, команда BatteryFly
+    </p>
+  </body>
+</html>`,
+      
+    };
+
+    await sendEmail(textEmail);
+
+    return res.status(200).json({
+      result: order
+    });
   }
 
-  const { status, cartItems, ttn } = req.body;
+  if (status === "Скасовано") {
+    console.log("Скасовано")
 
-  if (status && status !== current.status
-      && !isTransitionAllowed(current.status, status, current.payment)) {
-    throw HttpError(409, `Перехід «${current.status}» → «${status}» не дозволений`);
+    const order = await Order.findOne({ _id: req.params.id });
+    if (order.status === "В роботі") {
+      for (const item of cartItems) {
+        const product = await Product.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+      
+        if (!product) {
+          await ProductZbirky.findOneAndUpdate({ _id: item._id }, { quantity: (item.quantity + item.quantityOrdered) }, { new: true })
+        }
+      }
+      const order = await Order.findOneAndUpdate({ _id: req.params.id }, { ...req.body }, { new: true });
+  
+      if (!order) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+      }
+      return res.status(200).json({
+        result: order
+      });
+    }
   }
 
-  // deliveredAt і stockDeducted проставляє ВИКЛЮЧНО сервер. Значення з тіла
-  // прибираємо: адмінка шле назад увесь об'єкт замовлення, отриманий з GET, і
-  // без цих рядків клієнт міг би перезаписати дату доставки або збити
-  // прапорець списання, а разом з ним і залишки на складі.
+  // deliveredAt проставляє ВИКЛЮЧНО сервер. Значення з тіла запиту прибираємо:
+  // адмінка шле назад увесь об'єкт замовлення, отриманий з GET, і без цього
+  // рядка клієнт міг би перезаписати або обнулити дату доставки.
   const updateFields = { ...req.body };
   delete updateFields.deliveredAt;
-  delete updateFields.stockDeducted;
-
-  // ТТН обов'язковий саме на відправці: без номера цей статус не несе тієї
-  // інформації, заради якої його вводили.
-  if (status === ORDER_STATUS.SHIPPED && !ttn && !current.ttn) {
-    throw HttpError(400, 'Для статусу «Відправлено» потрібен номер ТТН');
-  }
-
-  // Списання складу перенесене з «В роботі» на «Оплачено»: гроші отримані —
-  // товар закріплений за клієнтом. Прапорець не дає списати двічі, якщо
-  // картку збережуть ще раз уже в тому самому статусі.
-  if (status === ORDER_STATUS.PAID && !current.stockDeducted) {
-    await applyStockChange(cartItems, -1);
-    updateFields.stockDeducted = true;
-  }
-
-  // Повернення на залишки — за ФАКТОМ списання, а не за статусом: скасувати
-  // можуть і з «Оплачено», і з «Відправлено».
-  if (status === ORDER_STATUS.CANCELLED && current.stockDeducted) {
-    await applyStockChange(cartItems, 1);
-    updateFields.stockDeducted = false;
-  }
 
   // Пишеться один раз — при першому переході в "Доставлено". Повторні
   // збереження вже доставленого замовлення дату не зсувають, інакше середній
   // час обробки поплив би від будь-якого редагування.
-  if (status === ORDER_STATUS.DELIVERED && !current.deliveredAt) {
-    updateFields.deliveredAt = new Date();
+  if (status === 'Доставлено') {
+    const current = await Order.findOne({ _id: req.params.id }, 'deliveredAt');
+
+    if (current && !current.deliveredAt) {
+      updateFields.deliveredAt = new Date();
+    }
   }
 
   const order = await Order.findOneAndUpdate({ _id: req.params.id }, updateFields, { new: true });
-
-  if (!order) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-
-  res.status(200).json({
-    result: order
-  });
+  
+      if (!order) {
+        throw HttpError(500, 'Internal server eror, write code in DB');
+      }
+      res.status(200).json({
+        result: order
+      });
 };
 
 // GET /api/adm/dashboard?period=month — усе для головної сторінки адмінки
@@ -925,120 +1087,6 @@ const getDashboard = async (req, res) => {
 
 
 
-// Готовий текст повідомлення для клієнта: шаблон із налаштувань + підставлені
-// дані замовлення.
-//
-// Окремий endpoint, а не поле у відповіді на зміну статусу: той самий текст
-// потрібно показати ще й повторно, кнопкою в картці замовлення, без жодної
-// зміни статусу. Один маршрут обслуговує обидва випадки.
-//
-// Статус приходить ПАРАМЕТРОМ, а не читається з бази: адмінка запитує текст
-// одразу після збереження нового статусу, і покладатись на те, що запис уже
-// видно наступному читанню, — це гонка.
-const getOrderMessage = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
-
-  if (!order) {
-    throw HttpError(404, 'Order not found');
-  }
-
-  const status = req.query.status || order.status;
-  const templateKey = getTemplateKey(order.payment, status);
-
-  // Для «Нове» шаблону не існує — це не помилка, а нормальний стан: щойно
-  // створеному замовленню клієнту ще нічого повідомляти.
-  if (!templateKey) {
-    return res.status(200).json({ result: { message: null, status, templateKey: null } });
-  }
-
-  const settings = toPlainSettings(await loadSettings());
-  const template = settings.messageTemplates[templateKey];
-
-  if (!template) {
-    return res.status(200).json({ result: { message: null, status, templateKey } });
-  }
-
-  const message = renderTemplate(template, order, settings);
-
-  res.status(200).json({
-    result: { message: message || null, status, templateKey },
-  });
-};
-
-// Налаштування магазину. Документ один на всю базу; якщо його ще немає —
-// хелпер створює з дефолтами, тож розділ ніколи не відкривається порожнім.
-const getShopSettings = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const settings = await loadSettings();
-
-  res.status(200).json({ result: toPlainSettings(settings) });
-};
-
-const updateShopSettings = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const settings = await loadSettings();
-  const { prepaymentPercent, requisites, messageTemplates } = req.body;
-
-  if (prepaymentPercent !== undefined) {
-    const percent = Number(prepaymentPercent);
-
-    // Відсоток бере участь у розрахунку грошей, тож перевіряємо тут, а не
-    // покладаємось на UI: адмінка на Netlify може відстати від бека.
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      throw HttpError(400, 'prepaymentPercent має бути числом від 0 до 100');
-    }
-
-    settings.prepaymentPercent = percent;
-  }
-
-  if (requisites !== undefined) {
-    if (typeof requisites !== 'string') {
-      throw HttpError(400, 'requisites має бути рядком');
-    }
-
-    settings.requisites = requisites;
-  }
-
-  if (messageTemplates !== undefined) {
-    if (typeof messageTemplates !== 'object' || messageTemplates === null) {
-      throw HttpError(400, 'messageTemplates має бути обʼєктом');
-    }
-
-    // Записуємо ЛИШЕ відомі ключі: інакше будь-яка помилка в адмінці засмічує
-    // документ полями, які ніхто ніколи не прочитає.
-    const allowed = new Set(getAllTemplateKeys());
-
-    Object.entries(messageTemplates).forEach(([key, value]) => {
-      if (allowed.has(key) && typeof value === 'string') {
-        settings.messageTemplates.set(key, value);
-      }
-    });
-  }
-
-  await settings.save();
-
-  res.status(200).json({ result: toPlainSettings(settings) });
-};
-
 module.exports = {
 
   login: ctrlWrapper(login),
@@ -1068,9 +1116,6 @@ module.exports = {
   getFeedback: ctrlWrapper(getFeedback),
   updateOrderById: ctrlWrapper(updateOrderById),
   getDashboard: ctrlWrapper(getDashboard),
-  getOrderMessage: ctrlWrapper(getOrderMessage),
-  getShopSettings: ctrlWrapper(getShopSettings),
-  updateShopSettings: ctrlWrapper(updateShopSettings),
 
 
 
