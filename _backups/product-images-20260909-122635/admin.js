@@ -1,5 +1,5 @@
 const express = require('express');
-const { validateBody, authAdm, upload, uploadProductImages } = require('../../middlewares');
+const { validateBody, authAdm, upload } = require('../../middlewares');
 const { schemas } = require('../../models/admin');
 const ctrl = require('../../controllers/admin');
 
@@ -8,10 +8,10 @@ const router = express.Router();
 router.post('/signin', validateBody(schemas.loginSchema), ctrl.login);
 router.post('/signout', authAdm, ctrl.logout);
 router.get('/current', authAdm, ctrl.getCurrent);
-router.post('/product-add', authAdm, uploadProductImages.array('files', 15), ctrl.addProduct);
-router.put('/product-edit/:id', authAdm, uploadProductImages.array('files', 15), ctrl.editProduct);
-router.post('/assemblies-add', authAdm, uploadProductImages.array('files', 15), ctrl.addProductZbirky);
-router.put('/assemblies-edit/:id', authAdm, uploadProductImages.array('files', 15), ctrl.editProductZbirky);
+router.post('/product-add', authAdm, upload.array('files', 12), ctrl.addProduct);
+router.put('/product-edit/:id', authAdm, upload.array('files', 12), ctrl.editProduct);
+router.post('/assemblies-add', authAdm, upload.array('files', 12), ctrl.addProductZbirky);
+router.put('/assemblies-edit/:id', authAdm,upload.array('files', 12),  ctrl.editProductZbirky);
 router.delete('/product/:id', authAdm, ctrl.deleteProduct);
 router.delete('/assemblies/:id', authAdm, ctrl.deleteZbirka);
 router.put('/hero/:id', authAdm, upload.single('image'), ctrl.changeHeaderInfo);

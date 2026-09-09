@@ -172,15 +172,19 @@ const getProductById = async (req, res) => {
     if (!product && !productZbirka) {
         throw HttpError(401, 'Bad request');
     }
+    // ⚠️ return обов'язковий. Без нього після відповіді по звичайному товару
+    // виконання йшло далі й слало ДРУГУ відповідь по збірці — Express писав
+    // ERR_HTTP_HEADERS_SENT у лог на кожне відкриття картки товару.
     if (product !== null) {
-        const result = product
         res.status(200).json({
-        result
-    });
+            result: product
+        });
+
+        return;
     }
-    const result = productZbirka
+
     res.status(200).json({
-        result
+        result: productZbirka
     });
 };
 
