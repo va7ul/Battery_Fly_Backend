@@ -100,10 +100,17 @@ Middleware-скорочення: **auth** = клієнтський JWT (`middlew
 | | POST `/forgot-password` | — | скидання паролю |
 | `/api/products` | GET `/` | — | усі товари |
 | | POST `/` | — | товари за масивом id (`getProductsArray`) |
-| | GET `/batteries`, `/batteries/21700`, `/18650`, `/32650`, `/lipo`, `/lifepo4` | — | батареї за категорією |
+| | GET `/batteries`, `/batteries/21700`, `/18650` | — | батареї за категорією |
 | | GET `/batteries-for-fpv`, `/-transport`, `/-toys` | — | батареї за призначенням |
 | | GET `/assemblies`, `/sale`, `/devices`, `/materials` | — | інші категорії каталогу |
 | | GET `/:id` | — | картка товару |
+
+> **Категорії 32650, Li-Po і LiFePO4 прибрані 2026-09-09** на прохання власника —
+> магазин ними не торгує. Перед видаленням перевірено на живій базі: жодного
+> товару з `type` `32650`, `li-po` чи `lifepo4` не було (77 товарів усього).
+> Прибрані маршрути, контролери й області впорядкування в `helpers/productScopes.js`.
+> Значення `type` у схемі не обмежене переліком, тож у самій моделі міняти нічого
+> не довелось.
 | `/api/user` | GET `/favorite` | auth | список обраного |
 | | POST/DELETE `/favorite/:id` | auth | додати/прибрати з обраного |
 | | GET `/verify/:verifyToken` | — | підтвердження email |
