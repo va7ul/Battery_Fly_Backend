@@ -15,9 +15,6 @@ const { ProductZbirky } = require('../models/products_zbirky');
 const PRODUCT_SCOPES = {
   'battery-18650': { model: Product, filter: { type: '18650' } },
   'battery-21700': { model: Product, filter: { type: '21700' } },
-  'battery-32650': { model: Product, filter: { type: '32650' } },
-  'battery-li-po': { model: Product, filter: { type: 'li-po' } },
-  'battery-lifepo4': { model: Product, filter: { type: 'lifepo4' } },
   devices: { model: Product, filter: { category: 'devices' } },
   materials: { model: Product, filter: { category: 'materials' } },
   assembly: { model: ProductZbirky, filter: { category: 'assembly' } },

@@ -114,17 +114,6 @@ const getBatterys18650 = async (req, res) => {
     });
 };
 
-const getBatterys32650 = async (req, res) => {
-    console.log("Batterys 18650")
-    const result = sortByOrder(await Product.find({ type: "32650" }).sort(ORDER_SORT))
-    
-    if (!result) {
-        throw HttpError(401, 'Bad request');
-    }
-    res.status(200).json({
-        result
-    });
-};
 
 const getBatterysFpv = async (req, res) => {
     console.log("getBatterysFpv")
@@ -212,29 +201,7 @@ const getMaterials = async (req, res) => {
     });
 };
 
-const getBatterysLipo = async (req, res) => {
-    console.log("Batterys 21700")
-    const result = sortByOrder(await Product.find({ type: "li-po" }).sort(ORDER_SORT))
-    
-    if (!result) {
-        throw HttpError(401, 'Bad request');
-    }
-    res.status(200).json({
-        result
-    });
-};
 
-const getBatterysLidepo4 = async (req, res) => {
-    console.log("Batterys 21700")
-    const result = sortByOrder(await Product.find({ type: "lifepo4" }).sort(ORDER_SORT))
-    
-    if (!result) {
-        throw HttpError(401, 'Bad request');
-    }
-    res.status(200).json({
-        result
-    });
-};
 
 module.exports = {
     getAllProducts: ctrlWrapper(getAllProducts),
@@ -242,15 +209,12 @@ module.exports = {
     getSales: ctrlWrapper(getSales),
     getBatterys21700: ctrlWrapper(getBatterys21700),
     getBatterys18650: ctrlWrapper(getBatterys18650),
-    getBatterys32650: ctrlWrapper(getBatterys32650),
     getProductById: ctrlWrapper(getProductById),
     getBatterysFpv: ctrlWrapper(getBatterysFpv),
     getBatterysTransport: ctrlWrapper(getBatterysTransport),
     getBatterysToys: ctrlWrapper(getBatterysToys),
     getDevices: ctrlWrapper(getDevices),
     getMaterials: ctrlWrapper(getMaterials),
-    getBatterysLipo: ctrlWrapper(getBatterysLipo),
-    getBatterysLidepo4: ctrlWrapper(getBatterysLidepo4),
     getAssemblies: ctrlWrapper(getAssemblies), 
     getProductsArray: ctrlWrapper(getProductsArray),
     
