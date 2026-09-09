@@ -1,71 +1,71 @@
 const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder, calculatePrepayment, getSettings } = require('../helpers');
-const { NOVA_POST, MAIL_USER } = process.env;
+const { MAIL_USER } = process.env;
 
-const axios = require('axios');
 const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
+const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
 const { User } = require('../models/user');
 const { QuickOrder } = require('../models/quickOrder');
-axios.defaults.baseURL = "https://api.novaposhta.ua/v2.0/json/"
 
+// Пошук міста для випадайки на checkout.
+//
+// ⚠️ Формат відповіді міняти НЕ можна: клієнтський фронт чекає рівно
+// { cities: string[] } — і { werehouses } з друкарською помилкою нижче теж.
+// Обидва зав'язані в redux/order/orderOperations.ts.
 const getDeliveryCity = async (req, res) => {
+    const query = String(req.body.query || '').trim();
 
-    const reqData = {
-        "apiKey": NOVA_POST,
-        "modelName": "Address",
-        "calledMethod": "getCities",
-        "methodProperties": {
+    if (!query) {
+        return res.status(200).json({ cities: [] });
+    }
 
-            "Page": "1",
-            "FindByString": req.body.query,
-            "Limit": "20"
+    try {
+        const cities = await npPost('Address', 'getCities', {
+            Page: '1',
+            FindByString: query,
+            Limit: '20',
+        });
+
+        res.status(200).json({ cities: cities.map(item => item.Description) });
+    } catch (error) {
+        // ⚠️ Раніше тут стояв .catch(), який віддавав 500 без жодного сліду в
+        // логах. Гірше: НП відповідає HTTP 200 навіть на провал, тож для її
+        // ділових помилок той catch не спрацьовував ЖОДНОГО разу — падіння
+        // виглядало як порожній список міст.
+        if (error instanceof NovaPoshtaError) {
+            throw HttpError(502, `Нова Пошта: ${error.message}`);
         }
-    };
 
-    axios.post('searchSettlements', reqData )
-        .then(function (response) {
-          
-      const result = response.data.data.map(item => item.Description)
-      res.status(200).json({
-          cities: result
-      });
-  })
-  .catch(function () {
-    res.status(500).json({
-          message: 'Bad request'
-      });
-  })
+        console.error('[getDeliveryCity] помилка запиту до Нової Пошти:', error.message);
+        throw HttpError(502, 'Не вдалося звʼязатися з Новою Поштою');
+    }
 };
 
+// Відділення й поштомати обраного міста.
 const getWarehouses = async (req, res) => {
+    const query = String(req.body.query || '').trim();
 
-    const reqData = {
-        "apiKey": NOVA_POST,
-        "modelName": "Address",
-        "calledMethod": "getWarehouses",
-        "methodProperties": {
-            "FindByString": "",
-            "CityName": req.body.query,
-            // "Page": "1",
-            // "Limit": "50",
-            "Language": "UA"
+    if (!query) {
+        return res.status(200).json({ werehouses: [] });
+    }
+
+    try {
+        const warehouses = await npPost('Address', 'getWarehouses', {
+            FindByString: '',
+            CityName: query,
+            Language: 'UA',
+        });
+
+        res.status(200).json({ werehouses: warehouses.map(item => item.Description) });
+    } catch (error) {
+        if (error instanceof NovaPoshtaError) {
+            throw HttpError(502, `Нова Пошта: ${error.message}`);
         }
-    };
 
-    axios.post('getWarehouses', reqData )
-        .then(function (response) {
-          
-      const result = response.data.data.map(item => item.Description)
-      res.status(200).json({
-          werehouses: result
-      });
-  })
-  .catch(function () {
-    res.status(500).json({
-          message: 'Bad request'
-      });
-  })
+        console.error('[getWarehouses] помилка запиту до Нової Пошти:', error.message);
+        throw HttpError(502, 'Не вдалося звʼязатися з Новою Поштою');
+    }
 };
 
 const addOrder = async (req, res) => {

@@ -41,6 +41,13 @@ router.patch('/feedback/:id/viewed', authAdm, ctrl.markFeedbackViewed);
 router.get('/settings', authAdm, ctrl.getShopSettings);
 router.put('/settings', authAdm, ctrl.updateShopSettings);
 
+// Довідник відправників Нової Пошти для налаштувань (контрагенти + контакти).
+router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
+
+// Формування ТТН. Статус замовлення не змінює — це робить окремий виклик
+// оновлення замовлення, тим самим шляхом, що й при ручному вводі номера.
+router.post('/orders/:numberOfOrder/create-ttn', authAdm, ctrl.createOrderTtn);
+
 
 
 

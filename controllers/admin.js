@@ -16,7 +16,17 @@ const {
   getAllTemplateKeys,
   getTemplateKey,
   renderTemplate,
+  getMissingSenderFields,
+  CASH_ON_DELIVERY,
 } = require('../helpers');
+const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
+const {
+  resolveCityRef,
+  resolveWarehouse,
+  ensureRecipient,
+  redeliverySum,
+  buildTtnPayload,
+} = require('../helpers/ttn');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -1098,7 +1108,8 @@ const updateShopSettings = async (req, res) => {
   }
 
   const settings = await loadSettings();
-  const { prepaymentPercent, requisites, messageTemplates } = req.body;
+  const { prepaymentPercent, requisites, messageTemplates, npSender, npDefaults } =
+    req.body;
 
   if (prepaymentPercent !== undefined) {
     const percent = Number(prepaymentPercent);
@@ -1136,9 +1147,270 @@ const updateShopSettings = async (req, res) => {
     });
   }
 
+  if (npSender !== undefined) {
+    if (typeof npSender !== 'object' || npSender === null) {
+      throw HttpError(400, 'npSender має бути обʼєктом');
+    }
+
+    // Білий список: усе інше з тіла ігнорується. Адмінка шле назад увесь
+    // об'єкт налаштувань, і без цього в документ потрапляли б випадкові поля.
+    const SENDER_KEYS = [
+      'counterpartyRef',
+      'counterpartyName',
+      'contactRef',
+      'contactName',
+      'phone',
+      'cityRef',
+      'cityName',
+      'warehouseRef',
+      'warehouseName',
+    ];
+
+    SENDER_KEYS.forEach(key => {
+      if (npSender[key] !== undefined) {
+        if (typeof npSender[key] !== 'string') {
+          throw HttpError(400, `npSender.${key} має бути рядком`);
+        }
+
+        settings.npSender[key] = npSender[key].trim();
+      }
+    });
+  }
+
+  if (npDefaults !== undefined) {
+    if (typeof npDefaults !== 'object' || npDefaults === null) {
+      throw HttpError(400, 'npDefaults має бути обʼєктом');
+    }
+
+    // Вага й обʼєм їдуть у Пошту як є, тож нуль або відʼємне число там
+    // перетворилось би на її ж малозрозумілу відмову.
+    ['weight', 'volumeGeneral'].forEach(key => {
+      if (npDefaults[key] !== undefined) {
+        const value = Number(npDefaults[key]);
+
+        if (!Number.isFinite(value) || value <= 0) {
+          throw HttpError(400, `npDefaults.${key} має бути додатним числом`);
+        }
+
+        settings.npDefaults[key] = value;
+      }
+    });
+
+    if (npDefaults.description !== undefined) {
+      if (typeof npDefaults.description !== 'string') {
+        throw HttpError(400, 'npDefaults.description має бути рядком');
+      }
+
+      settings.npDefaults.description = npDefaults.description.trim();
+    }
+  }
+
   await settings.save();
 
   res.status(200).json({ result: toPlainSettings(settings) });
+};
+
+// Формування ТТН Нової Пошти для замовлення.
+//
+// ⚠️ Статус замовлення тут НЕ змінюється — свідомо. Перехід у «Відправлено»
+// має власні правила (дозволені переходи, обов'язковість ТТН, залишки), і вони
+// вже живуть в updateOrderById. Дублювати їх тут означало б завести другий,
+// нікому не відомий шлях зміни статусу, який розійдеться з першим при першій
+// же правці. Адмінка після успіху викликає той самий updateOrderById, що й при
+// ручному вводі номера.
+//
+// ⚠️ Номер зберігається ОДРАЗУ після відповіді Пошти, окремим записом. Якщо
+// впасти між створенням ТТН і збереженням, у Пошті лишиться оплачена накладна,
+// про яку магазин нічого не знає, — а другу для того самого замовлення вже не
+// створити (див. перевірку нижче).
+const createOrderTtn = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { numberOfOrder } = req.params;
+  const order = await Order.findOne({ numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, `Замовлення ${numberOfOrder} не знайдено`);
+  }
+
+  // Друга ТТН на те саме замовлення — це друга реальна посилка й друга оплата
+  // доставки. Краще показати наявний номер, ніж мовчки створити ще одну.
+  if (order.ttn) {
+    throw HttpError(409, `Для цього замовлення вже є ТТН: ${order.ttn}`);
+  }
+
+  const settings = await loadSettings();
+  const missing = getMissingSenderFields(settings);
+
+  if (missing.length > 0) {
+    throw HttpError(
+      400,
+      `Не заповнено дані відправника в Налаштуваннях: ${missing.join(', ')}`
+    );
+  }
+
+  const { weight, volumeGeneral, seatsAmount, cost, description, codAmount } = req.body;
+
+  const positive = (value, label) => {
+    const number = Number(value);
+
+    if (!Number.isFinite(number) || number <= 0) {
+      throw HttpError(400, `${label} має бути додатним числом`);
+    }
+
+    return number;
+  };
+
+  const manual = {
+    weight: positive(weight, 'Вага'),
+    volumeGeneral: positive(volumeGeneral, "Обʼєм"),
+    seatsAmount: Math.max(1, Math.trunc(Number(seatsAmount) || 1)),
+    cost: Math.max(0, Math.round(Number(cost) || 0)),
+    description: String(description || '').trim(),
+    codAmount: 0,
+  };
+
+  if (!manual.description) {
+    throw HttpError(400, 'Опис відправлення обовʼязковий');
+  }
+
+  // Наложка тільки для накладеного платежу. Сума з модалки має пріоритет —
+  // менеджер міг домовитись інакше, — але для решти способів оплати вона
+  // ігнорується: там гроші вже отримані.
+  if (order.payment === CASH_ON_DELIVERY) {
+    const запропоновано = redeliverySum(order);
+    const обрано = codAmount === undefined || codAmount === null ? запропоновано : Number(codAmount);
+
+    if (обрано !== null && Number.isFinite(обрано) && обрано > 0) {
+      manual.codAmount = Math.round(обрано);
+    }
+  }
+
+  try {
+    // Адреса отримувача відновлюється з тексту замовлення: Ref у ньому ніколи
+    // не зберігався, а назви Пошти однозначні.
+    const city = await resolveCityRef(order.city);
+    const warehouse = await resolveWarehouse(order.city, order.warehouse);
+
+    if (warehouse.maxWeight && manual.weight > warehouse.maxWeight) {
+      throw HttpError(
+        400,
+        `Вага ${manual.weight} кг перевищує ліміт цього відділення (${warehouse.maxWeight} кг). ` +
+          `Це ${warehouse.category === 'Postomat' ? 'поштомат' : 'відділення'}, ` +
+          'оберіть меншу вагу або домовтесь із клієнтом про іншу адресу.'
+      );
+    }
+
+    // ⚠️ Дані клієнта в замовленні ПЛАСКІ. Форма шле їх у userData, але
+    // контролер створення розкладає їх на верхній рівень (див. схему
+    // models/order.js) — і order.userData в збереженому документі не існує.
+    const recipient = await ensureRecipient({
+      firstName: order.firstName,
+      lastName: order.lastName,
+      phone: order.tel,
+    });
+
+    const payload = buildTtnPayload({
+      order,
+      sender: settings.npSender,
+      recipient,
+      city,
+      warehouse,
+      manual,
+    });
+
+    const created = await npPost('InternetDocument', 'save', payload);
+    const document = created[0];
+
+    if (!document || !document.IntDocNumber) {
+      throw new NovaPoshtaError(['Нова Пошта не повернула номер ТТН']);
+    }
+
+    order.ttn = document.IntDocNumber;
+    await order.save();
+
+    res.status(200).json({
+      result: {
+        ttn: document.IntDocNumber,
+        ref: document.Ref,
+        cost: document.CostOnSite,
+        estimatedDeliveryDate: document.EstimatedDeliveryDate,
+        serviceType: payload.ServiceType,
+        warehouseCategory: warehouse.category,
+        codAmount: manual.codAmount,
+      },
+    });
+  } catch (error) {
+    if (error instanceof NovaPoshtaError) {
+      // Текст Пошти йде до менеджера як є: саме він каже, що виправити.
+      throw HttpError(502, `Нова Пошта: ${error.message}`);
+    }
+
+    if (error.status) {
+      throw error;
+    }
+
+    console.error('[createOrderTtn] несподівана помилка:', error.message);
+    throw HttpError(502, 'Не вдалося створити ТТН');
+  }
+};
+
+// Довідник відправників для налаштувань адмінки.
+//
+// Contragent і контактна особа — єдине в усій інтеграції, чого НЕ можна
+// вивести з назви: це внутрішні ідентифікатори кабінету Нової Пошти. Тому їх
+// не вводять руками, а вибирають зі списку, який Пошта віддає за нашим же
+// ключем — переплутати 36 символів тоді просто ніде.
+const getNovaPoshtaSenders = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  try {
+    const counterparties = await npPost('Counterparty', 'getCounterparties', {
+      CounterpartyProperty: 'Sender',
+      Page: '1',
+    });
+
+    // Контакти запитуються на кожного контрагента окремо — свого «дай усе
+    // одразу» метода Пошта не має. Відправників у кабінету одиниці, тож
+    // послідовні виклики тут дешевші за складність.
+    const result = [];
+
+    for (const party of counterparties) {
+      const contacts = await npPost('ContactPerson', 'getCounterpartyContactPersons', {
+        Ref: party.Ref,
+        Page: '1',
+      });
+
+      result.push({
+        ref: party.Ref,
+        name: party.Description,
+        contacts: contacts.map(person => ({
+          ref: person.Ref,
+          name: person.Description,
+          phone: person.Phones || '',
+        })),
+      });
+    }
+
+    res.status(200).json({ result });
+  } catch (error) {
+    if (error instanceof NovaPoshtaError) {
+      throw HttpError(502, `Нова Пошта: ${error.message}`);
+    }
+
+    console.error('[getNovaPoshtaSenders] помилка:', error.message);
+    throw HttpError(502, 'Не вдалося звʼязатися з Новою Поштою');
+  }
 };
 
 
@@ -1309,6 +1581,8 @@ module.exports = {
   getOrderMessage: ctrlWrapper(getOrderMessage),
   getShopSettings: ctrlWrapper(getShopSettings),
   updateShopSettings: ctrlWrapper(updateShopSettings),
+  getNovaPoshtaSenders: ctrlWrapper(getNovaPoshtaSenders),
+  createOrderTtn: ctrlWrapper(createOrderTtn),
   getCounters: ctrlWrapper(getCounters),
   markOrderViewed: ctrlWrapper(markOrderViewed),
   markPrint3dViewed: ctrlWrapper(markPrint3dViewed),

@@ -47,7 +47,42 @@ function toPlainSettings(settings) {
     prepaymentPercent: settings.prepaymentPercent,
     requisites: settings.requisites,
     messageTemplates: templatesToObject(settings),
+    // Розгортаємо явно, а не віддаємо піддокумент як є: у JSON з Mongoose
+    // приїхали б ще _id і зайві методи, і адмінка слала б їх назад у PUT.
+    npSender: {
+      counterpartyRef: settings.npSender?.counterpartyRef || '',
+      counterpartyName: settings.npSender?.counterpartyName || '',
+      contactRef: settings.npSender?.contactRef || '',
+      contactName: settings.npSender?.contactName || '',
+      phone: settings.npSender?.phone || '',
+      cityRef: settings.npSender?.cityRef || '',
+      cityName: settings.npSender?.cityName || '',
+      warehouseRef: settings.npSender?.warehouseRef || '',
+      warehouseName: settings.npSender?.warehouseName || '',
+    },
+    npDefaults: {
+      weight: settings.npDefaults?.weight ?? 1,
+      volumeGeneral: settings.npDefaults?.volumeGeneral ?? 0.004,
+      description: settings.npDefaults?.description || '',
+    },
   };
+}
+
+// Чи заповнене все, без чого InternetDocument.save не викликати.
+//
+// Перевіряється ПЕРЕД зверненням до Пошти: інакше менеджер отримав би її
+// внутрішнє «Sender not found» замість зрозумілого «заповніть відправника».
+function getMissingSenderFields(settings) {
+  const sender = settings.npSender || {};
+  const required = [
+    ['counterpartyRef', 'контрагент-відправник'],
+    ['contactRef', 'контактна особа'],
+    ['phone', 'телефон відправника'],
+    ['cityRef', 'місто відправлення'],
+    ['warehouseRef', 'відділення відправлення'],
+  ];
+
+  return required.filter(([key]) => !sender[key]).map(([, label]) => label);
 }
 
 module.exports = {
@@ -55,4 +90,5 @@ module.exports = {
   getAllTemplateKeys,
   templatesToObject,
   toPlainSettings,
+  getMissingSenderFields,
 };
