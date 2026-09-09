@@ -6,6 +6,8 @@ const {
   HttpError,
   ctrlWrapper,
   cloudImageProduct,
+  resolveProductImages,
+  cleanupOrphans,
   ORDER_STATUS,
   isTransitionAllowed,
   calculatePrepayment,
@@ -94,15 +96,20 @@ const addProduct = async (req, res) => {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
   
-  const images = await cloudImageProduct(req.files)
+  // Для нового товару наявних фото немає, тож resolveProductImages просто
+  // завантажить files у тому порядку, який прислала адмінка.
+  const { image } = await resolveProductImages([], req.body, req.files)
 
+  if (!image || image.length === 0) {
+    throw HttpError(400, 'Потрібне щонайменше одне фото товару');
+  }
 
   // Новий товар стає ОСТАННІМ у своєму списку, а не першим-ліпшим: інакше він
   // з'являвся б у випадковому місці вітрини, і власнику довелося б шукати його
   // серед решти, щоб перетягнути.
   const order = await getNextOrder(req.body);
 
-  const addResult = await Product.create({ ...req.body, codeOfGood, image: images, order })
+  const addResult = await Product.create({ ...req.body, codeOfGood, image, order })
     
   
   if (!addResult) {
@@ -122,23 +129,43 @@ const editProduct = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  if (req.files.length > 0) {
+  const current = await Product.findOne({ codeOfGood: id });
 
-    const images = await cloudImageProduct(req.files)
-
-    const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body, image: images }, { new: true })
-    
-    if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-  res.status(200).json({ editResult })
+  if (!current) {
+    throw HttpError(404, 'Product not found');
   }
 
-  const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, { ...req.body}, { new: true })
-  
+  // Фінальний склад фото рахуємо ДО запису: keepImages каже, що лишається, у
+  // якому порядку, files додає нові.
+  const { image, orphans } = await resolveProductImages(current.image, req.body, req.files);
+
+  const updateFields = { ...req.body };
+  // keepImages/imageOrder — службові поля контракту, у документі товару їм не
+  // місце. Без цього вони осіли б у базі окремими полями.
+  delete updateFields.keepImages;
+  delete updateFields.imageOrder;
+
+  if (image) {
+    if (image.length === 0) {
+      throw HttpError(400, 'У товарі має лишитись щонайменше одне фото');
+    }
+
+    updateFields.image = image;
+  }
+
+  // ⚠️ Раніше тут було ДВА res.json підряд: гілка з файлами відповідала й не
+  // робила return, тож далі йшов другий запис у базу і другий res.json —
+  // Express писав ERR_HTTP_HEADERS_SENT у лог на кожне збереження з фото.
+  const editResult = await Product.findOneAndUpdate({ codeOfGood: id }, updateFields, { new: true })
+
   if (!editResult) {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
+
+  // Прибирання хмари — ПІСЛЯ успішного запису: якщо оновлення впаде, фото ще
+  // потрібні товару.
+  await cleanupOrphans(orphans, [Product, ProductZbirky], editResult._id);
+
   res.status(200).json({ editResult })
 };
 
@@ -172,11 +199,15 @@ const addProductZbirky = async (req, res) => {
   }
   
 
-    const images = await cloudImageProduct(req.files)
+    const { image } = await resolveProductImages([], req.body, req.files)
+
+    if (!image || image.length === 0) {
+        throw HttpError(400, 'Потрібне щонайменше одне фото товару');
+    }
 
     const order = await getNextOrder(req.body);
 
-    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image: images, capacity: {...newCapacity}, order })
+    const addResult = await ProductZbirky.create({ ...req.body, codeOfGood, image, capacity: {...newCapacity}, order })
     if (!addResult) {
         throw HttpError(500, 'Internal server eror, write code in DB');
     }
@@ -206,27 +237,42 @@ const editProductZbirky = async (req, res) => {
     newCapacity[key[0]] = cap[key[0]]
   }
 
-  if (req.files.length > 0) {
+  const current = await ProductZbirky.findOne({ codeOfGood: id });
 
-    const images = await cloudImageProduct(req.files)
-
-     const capacity = JSON.parse(req.body.capacity)
-
-  
-
-    const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}, image: images }, { new: true })
-    
-    if (!editResult) {
-    throw HttpError(500, 'Internal server eror, write code in DB');
-  }
-  res.status(200).json({ editResult })
+  if (!current) {
+    throw HttpError(404, 'Product not found');
   }
 
-  const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, { ...req.body, capacity: {...newCapacity}}, { new: true })
-  
+  // Фінальний склад фото рахуємо ДО запису: keepImages каже, що лишається і в
+  // якому порядку, files додає нові.
+  const { image, orphans } = await resolveProductImages(current.image, req.body, req.files);
+
+  const updateFields = { ...req.body, capacity: {...newCapacity} };
+  // Службові поля контракту не мають осідати в документі товару.
+  delete updateFields.keepImages;
+  delete updateFields.imageOrder;
+
+  if (image) {
+    if (image.length === 0) {
+      throw HttpError(400, 'У товарі має лишитись щонайменше одне фото');
+    }
+
+    updateFields.image = image;
+  }
+
+  // ⚠️ Раніше тут було ДВА res.json підряд: гілка з файлами відповідала й не
+  // робила return, тож далі йшов другий запис у базу і другий res.json —
+  // Express писав ERR_HTTP_HEADERS_SENT у лог на кожне збереження з фото.
+  const editResult = await ProductZbirky.findOneAndUpdate({ codeOfGood: id }, updateFields, { new: true })
+
   if (!editResult) {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
+
+  // Прибирання хмари — ПІСЛЯ успішного запису: якщо оновлення впаде, фото ще
+  // потрібні товару.
+  await cleanupOrphans(orphans, [Product, ProductZbirky], editResult._id);
+
   res.status(200).json({ editResult })
 };
 
