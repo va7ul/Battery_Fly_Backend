@@ -17,6 +17,7 @@ const {
   getTemplateKey,
   renderTemplate,
 } = require('../helpers');
+const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -1098,7 +1099,8 @@ const updateShopSettings = async (req, res) => {
   }
 
   const settings = await loadSettings();
-  const { prepaymentPercent, requisites, messageTemplates } = req.body;
+  const { prepaymentPercent, requisites, messageTemplates, npSender, npDefaults } =
+    req.body;
 
   if (prepaymentPercent !== undefined) {
     const percent = Number(prepaymentPercent);
@@ -1136,9 +1138,120 @@ const updateShopSettings = async (req, res) => {
     });
   }
 
+  if (npSender !== undefined) {
+    if (typeof npSender !== 'object' || npSender === null) {
+      throw HttpError(400, 'npSender має бути обʼєктом');
+    }
+
+    // Білий список: усе інше з тіла ігнорується. Адмінка шле назад увесь
+    // об'єкт налаштувань, і без цього в документ потрапляли б випадкові поля.
+    const SENDER_KEYS = [
+      'counterpartyRef',
+      'counterpartyName',
+      'contactRef',
+      'contactName',
+      'phone',
+      'cityRef',
+      'cityName',
+      'warehouseRef',
+      'warehouseName',
+    ];
+
+    SENDER_KEYS.forEach(key => {
+      if (npSender[key] !== undefined) {
+        if (typeof npSender[key] !== 'string') {
+          throw HttpError(400, `npSender.${key} має бути рядком`);
+        }
+
+        settings.npSender[key] = npSender[key].trim();
+      }
+    });
+  }
+
+  if (npDefaults !== undefined) {
+    if (typeof npDefaults !== 'object' || npDefaults === null) {
+      throw HttpError(400, 'npDefaults має бути обʼєктом');
+    }
+
+    // Вага й обʼєм їдуть у Пошту як є, тож нуль або відʼємне число там
+    // перетворилось би на її ж малозрозумілу відмову.
+    ['weight', 'volumeGeneral'].forEach(key => {
+      if (npDefaults[key] !== undefined) {
+        const value = Number(npDefaults[key]);
+
+        if (!Number.isFinite(value) || value <= 0) {
+          throw HttpError(400, `npDefaults.${key} має бути додатним числом`);
+        }
+
+        settings.npDefaults[key] = value;
+      }
+    });
+
+    if (npDefaults.description !== undefined) {
+      if (typeof npDefaults.description !== 'string') {
+        throw HttpError(400, 'npDefaults.description має бути рядком');
+      }
+
+      settings.npDefaults.description = npDefaults.description.trim();
+    }
+  }
+
   await settings.save();
 
   res.status(200).json({ result: toPlainSettings(settings) });
+};
+
+// Довідник відправників для налаштувань адмінки.
+//
+// Contragent і контактна особа — єдине в усій інтеграції, чого НЕ можна
+// вивести з назви: це внутрішні ідентифікатори кабінету Нової Пошти. Тому їх
+// не вводять руками, а вибирають зі списку, який Пошта віддає за нашим же
+// ключем — переплутати 36 символів тоді просто ніде.
+const getNovaPoshtaSenders = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  try {
+    const counterparties = await npPost('Counterparty', 'getCounterparties', {
+      CounterpartyProperty: 'Sender',
+      Page: '1',
+    });
+
+    // Контакти запитуються на кожного контрагента окремо — свого «дай усе
+    // одразу» метода Пошта не має. Відправників у кабінету одиниці, тож
+    // послідовні виклики тут дешевші за складність.
+    const result = [];
+
+    for (const party of counterparties) {
+      const contacts = await npPost('ContactPerson', 'getCounterpartyContactPersons', {
+        Ref: party.Ref,
+        Page: '1',
+      });
+
+      result.push({
+        ref: party.Ref,
+        name: party.Description,
+        contacts: contacts.map(person => ({
+          ref: person.Ref,
+          name: person.Description,
+          phone: person.Phones || '',
+        })),
+      });
+    }
+
+    res.status(200).json({ result });
+  } catch (error) {
+    if (error instanceof NovaPoshtaError) {
+      throw HttpError(502, `Нова Пошта: ${error.message}`);
+    }
+
+    console.error('[getNovaPoshtaSenders] помилка:', error.message);
+    throw HttpError(502, 'Не вдалося звʼязатися з Новою Поштою');
+  }
 };
 
 
@@ -1309,6 +1422,7 @@ module.exports = {
   getOrderMessage: ctrlWrapper(getOrderMessage),
   getShopSettings: ctrlWrapper(getShopSettings),
   updateShopSettings: ctrlWrapper(updateShopSettings),
+  getNovaPoshtaSenders: ctrlWrapper(getNovaPoshtaSenders),
   getCounters: ctrlWrapper(getCounters),
   markOrderViewed: ctrlWrapper(markOrderViewed),
   markPrint3dViewed: ctrlWrapper(markPrint3dViewed),

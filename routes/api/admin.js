@@ -41,6 +41,9 @@ router.patch('/feedback/:id/viewed', authAdm, ctrl.markFeedbackViewed);
 router.get('/settings', authAdm, ctrl.getShopSettings);
 router.put('/settings', authAdm, ctrl.updateShopSettings);
 
+// Довідник відправників Нової Пошти для налаштувань (контрагенти + контакти).
+router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
+
 
 
 

@@ -32,6 +32,43 @@ const settingsSchema = new Schema(
       of: String,
       default: () => new Map(),
     },
+
+    // ── Відправник Нової Пошти ────────────────────────────────────────────
+    //
+    // Потрібно для InternetDocument.save: без цих п'яти значень ТТН не
+    // створити. Тримаємо тут, а не в .env, з тієї самої причини, що й решту
+    // налаштувань — власник міняє їх сам, без деплою (переїзд на інше
+    // відділення, зміна контактної особи).
+    //
+    // ⚠️ Ref і назва зберігаються ПАРОЮ навмисно. Ref — те, що розуміє Пошта;
+    // назва — те, що бачить людина в адмінці. Без назви налаштування
+    // перетворюється на набір із 36 нечитних символів, у якому не видно, чи
+    // взагалі туди щось записано і чи те саме.
+    npSender: {
+      // Контрагент-відправник: Counterparty.getCounterparties(Sender).
+      counterpartyRef: { type: String, default: '' },
+      counterpartyName: { type: String, default: '' },
+      // Контактна особа: ContactPerson.getCounterpartyContactPersons.
+      contactRef: { type: String, default: '' },
+      contactName: { type: String, default: '' },
+      phone: { type: String, default: '' },
+      // Місто й відділення відправлення.
+      cityRef: { type: String, default: '' },
+      cityName: { type: String, default: '' },
+      warehouseRef: { type: String, default: '' },
+      warehouseName: { type: String, default: '' },
+    },
+
+    // Дефолти для модалки ТТН. Вага й габарити товарів у базі не зберігаються
+    // (перевірено: структурованих полів немає, у тексті опису — лише в 20 із
+    // 77 товарів і в різних форматах), тож менеджер вводить їх руками. Ці
+    // значення лише підставляються у форму, щоб не набирати щоразу одне й те
+    // саме для типового замовлення.
+    npDefaults: {
+      weight: { type: Number, default: 1 },
+      volumeGeneral: { type: Number, default: 0.004 },
+      description: { type: String, default: 'Акумулятори та комплектуючі' },
+    },
   },
   { versionKey: false, timestamps: true }
 );
