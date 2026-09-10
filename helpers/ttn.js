@@ -122,6 +122,45 @@ function buildOptionsSeat({ seatsAmount, weight, width, length, height }) {
   return { optionsSeat: місця, volumeGeneral: round(volumePerSeat * seatsAmount) };
 }
 
+// Чому Пошта відхилила накладений платіж.
+//
+// ⚠️ «Передана послуга Післяплата недоступна» (код 20000204637) — це НЕ про
+// payload. Значення `Money` і `Recipient` беруться з її ж довідників
+// (getBackwardDeliveryCargoTypes, getTypesOfPayersForRedelivery), і звичайна
+// накладна з тими самими даними створюється. Це про договір: післяплату
+// вмикає менеджер Нової Пошти окремо, і поки її немає — накладений платіж
+// через API не оформити.
+//
+// Питаємо в Пошти прямо, чи підключена послуга, щоб не радити менеджеру
+// «зверніться до НП», коли річ насправді в іншому. Перевірка НЕ обов'язкова:
+// якщо вона сама впаде, повідомлення просто лишиться загальнішим.
+async function explainRedeliveryRefusal(counterpartyRef) {
+  const загальне =
+    'Нова Пошта відхилила накладений платіж: послуга «Післяплата» недоступна. ' +
+    'Її підключає менеджер Нової Пошти за договором. ' +
+    'Поки її немає — створіть накладну без накладеного платежу (вкажіть у полі 0) ' +
+    'і візьміть оплату іншим способом.';
+
+  try {
+    const options = await npPost('Counterparty', 'getCounterpartyOptions', {
+      Ref: counterpartyRef,
+    });
+    const доступна = options[0] && options[0].CanAfterpaymentOnGoodsCost;
+
+    if (доступна === false) {
+      return (
+        'Послуга «Післяплата» не підключена для вашого контрагента в Новій Пошті ' +
+        '(CanAfterpaymentOnGoodsCost = false). Її вмикає менеджер НП за договором. ' +
+        'Поки її немає — створіть накладну без накладеного платежу (вкажіть у полі 0).'
+      );
+    }
+  } catch (error) {
+    console.error('[ttn] не вдалося перевірити опції контрагента:', error.message);
+  }
+
+  return загальне;
+}
+
 // methodProperties для InternetDocument.save.
 //
 // Зібрано в окремій функції, щоб payload було видно одним шматком: саме його
@@ -188,6 +227,7 @@ function buildTtnPayload({
 }
 
 module.exports = {
+  explainRedeliveryRefusal,
   buildOptionsSeat,
   normalizePhone,
   todayForNp,
