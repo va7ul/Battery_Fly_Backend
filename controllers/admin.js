@@ -1160,9 +1160,7 @@ const updateShopSettings = async (req, res) => {
       'contactRef',
       'contactName',
       'phone',
-      'cityRef',
       'cityName',
-      'warehouseRef',
       'warehouseName',
     ];
 
@@ -1297,6 +1295,14 @@ const createOrderTtn = async (req, res) => {
     const city = await resolveCityRef(order.city);
     const warehouse = await resolveWarehouse(order.city, order.warehouse);
 
+    // Адреса ВІДПРАВНИКА — тим самим механізмом. У налаштуваннях лежать лише
+    // назви, обрані з довідника Пошти, тож Ref беремо тут, а не зберігаємо.
+    const senderCity = await resolveCityRef(settings.npSender.cityName);
+    const senderWarehouse = await resolveWarehouse(
+      settings.npSender.cityName,
+      settings.npSender.warehouseName
+    );
+
     if (warehouse.maxWeight && manual.weight > warehouse.maxWeight) {
       throw HttpError(
         400,
@@ -1318,6 +1324,8 @@ const createOrderTtn = async (req, res) => {
     const payload = buildTtnPayload({
       order,
       sender: settings.npSender,
+      senderCity,
+      senderWarehouse,
       recipient,
       city,
       warehouse,
