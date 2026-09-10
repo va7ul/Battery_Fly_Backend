@@ -60,7 +60,9 @@ function toPlainSettings(settings) {
     },
     npDefaults: {
       weight: settings.npDefaults?.weight ?? 1,
-      volumeGeneral: settings.npDefaults?.volumeGeneral ?? 0.004,
+      width: settings.npDefaults?.width ?? 20,
+      length: settings.npDefaults?.length ?? 20,
+      height: settings.npDefaults?.height ?? 10,
       description: settings.npDefaults?.description || '',
     },
   };
