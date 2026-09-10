@@ -68,7 +68,11 @@ const settingsSchema = new Schema(
     // саме для типового замовлення.
     npDefaults: {
       weight: { type: Number, default: 1 },
-      volumeGeneral: { type: Number, default: 0.004 },
+      // Габарити типової коробки в сантиметрах. Саме сантиметри, а не м³:
+      // з них Пошта вимагає збирати OptionsSeat, та й міряють коробку так.
+      width: { type: Number, default: 20 },
+      length: { type: Number, default: 20 },
+      height: { type: Number, default: 10 },
       description: { type: String, default: 'Акумулятори та комплектуючі' },
     },
   },

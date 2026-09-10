@@ -1182,7 +1182,7 @@ const updateShopSettings = async (req, res) => {
 
     // Вага й обʼєм їдуть у Пошту як є, тож нуль або відʼємне число там
     // перетворилось би на її ж малозрозумілу відмову.
-    ['weight', 'volumeGeneral'].forEach(key => {
+    ['weight', 'width', 'length', 'height'].forEach(key => {
       if (npDefaults[key] !== undefined) {
         const value = Number(npDefaults[key]);
 
@@ -1252,7 +1252,8 @@ const createOrderTtn = async (req, res) => {
     );
   }
 
-  const { weight, volumeGeneral, seatsAmount, cost, description, codAmount } = req.body;
+  const { weight, width, length, height, seatsAmount, cost, description, codAmount } =
+    req.body;
 
   const positive = (value, label) => {
     const number = Number(value);
@@ -1264,9 +1265,13 @@ const createOrderTtn = async (req, res) => {
     return number;
   };
 
+  // Габарити в сантиметрах — з них рахується OptionsSeat, без якого Пошта
+  // накладну не приймає.
   const manual = {
     weight: positive(weight, 'Вага'),
-    volumeGeneral: positive(volumeGeneral, "Обʼєм"),
+    width: positive(width, 'Ширина'),
+    length: positive(length, 'Довжина'),
+    height: positive(height, 'Висота'),
     seatsAmount: Math.max(1, Math.trunc(Number(seatsAmount) || 1)),
     cost: Math.max(0, Math.round(Number(cost) || 0)),
     description: String(description || '').trim(),

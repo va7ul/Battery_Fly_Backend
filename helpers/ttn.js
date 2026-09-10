@@ -88,6 +88,40 @@ function redeliverySum(order) {
   return rest > 0 ? rest : null;
 }
 
+// Опис місць відправлення.
+//
+// ⚠️ Пошта вимагає OptionsSeat навіть для однієї коробки: без нього
+// InternetDocument.save відповідає «param OptionsSeat required» (код
+// 20000201812). Самих Weight і VolumeGeneral їй не досить.
+//
+// Габарити — в САНТИМЕТРАХ (так їх і міряють), об'єм місця рахуємо самі в м³.
+// Вага розподіляється між місцями порівну, а залишок від округлення додається
+// до останнього — щоб сума ваг місць точно збіглася із загальною вагою.
+function buildOptionsSeat({ seatsAmount, weight, width, length, height }) {
+  const volumePerSeat = (width * length * height) / 1000000;
+  const round = value => Math.round(value * 1000000) / 1000000;
+
+  const базоваВага = Math.floor((weight / seatsAmount) * 100) / 100;
+  const місця = [];
+
+  for (let i = 0; i < seatsAmount; i += 1) {
+    const останнє = i === seatsAmount - 1;
+    const вага = останнє
+      ? round(weight - базоваВага * (seatsAmount - 1))
+      : базоваВага;
+
+    місця.push({
+      volumetricVolume: String(round(volumePerSeat)),
+      volumetricWidth: String(width),
+      volumetricLength: String(length),
+      volumetricHeight: String(height),
+      weight: String(вага),
+    });
+  }
+
+  return { optionsSeat: місця, volumeGeneral: round(volumePerSeat * seatsAmount) };
+}
+
 // methodProperties для InternetDocument.save.
 //
 // Зібрано в окремій функції, щоб payload було видно одним шматком: саме його
@@ -102,6 +136,14 @@ function buildTtnPayload({
   warehouse,
   manual,
 }) {
+  const { optionsSeat, volumeGeneral } = buildOptionsSeat({
+    seatsAmount: manual.seatsAmount,
+    weight: manual.weight,
+    width: manual.width,
+    length: manual.length,
+    height: manual.height,
+  });
+
   const payload = {
     // Платить отримувач — рішення власника. Готівкою на відділенні.
     PayerType: 'Recipient',
@@ -111,8 +153,9 @@ function buildTtnPayload({
     ServiceType: serviceTypeFor(warehouse),
 
     Weight: String(manual.weight),
-    VolumeGeneral: String(manual.volumeGeneral),
+    VolumeGeneral: String(volumeGeneral),
     SeatsAmount: String(manual.seatsAmount),
+    OptionsSeat: optionsSeat,
     Description: manual.description,
     Cost: String(manual.cost),
 
@@ -145,6 +188,7 @@ function buildTtnPayload({
 }
 
 module.exports = {
+  buildOptionsSeat,
   normalizePhone,
   todayForNp,
   ensureRecipient,
