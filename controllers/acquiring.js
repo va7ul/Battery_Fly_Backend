@@ -1,4 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder } = require('../helpers');
+const { ctrlWrapper, HttpError, notifyNewOrder } = require('../helpers');
 const {
     acquiringPost,
     acquiringGet,
@@ -16,7 +16,7 @@ const { NumberOfOrders } = require('../models/numberOfOrders');
 const { PromoCode } = require('../models/promoCode');
 const { User } = require('../models/user');
 
-const { MAIL_USER, PUBLIC_URL, FRONTEND_URL } = process.env;
+const { PUBLIC_URL, FRONTEND_URL } = process.env;
 
 function logAcquiringError(context, error) {
     if (error.response) {
@@ -69,41 +69,6 @@ function canRetryPayment(order) {
         && isInvoiceStillValid(order.acquiringInvoiceCreatedAt || order.createdAt);
 }
 
-function buildAcceptedEmail(email, numberOfOrder) {
-    return {
-        from: MAIL_USER,
-        to: email,
-        subject: `Ваше замовлення №${numberOfOrder} прийнято, очікуємо оплату`,
-        html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
-<html lang="uk">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
-  </head>
-  <body style="width: 600px">
-    <b>Ваше замовлення прийнято!</b>
-    <p>
-      Дякуємо за ваше замовлення в BatteryFly! Замовлення №${numberOfOrder}
-      успішно створено, зараз ми очікуємо надходження оплати карткою.
-    </p>
-    <p>
-      Щойно оплата пройде, ми зв’яжемось з вами для уточнення деталей та
-      подальших кроків.
-    </p>
-    <p>
-      Якщо у вас виникли запитання, зв'яжіться з нашою підтримкою: <br />тел.
-      <a href="tel:+380509686485">+38(050)968-64-85</a> <br />e-mail
-      <a href="mailto:batteryfly@meta.ua">batteryfly@meta.ua</a>
-    </p>
-    <p>Дякуємо, що обрали BatteryFly!</p>
-    <hr />
-    <p>З повагою, <br />Команда BatteryFly</p>
-  </body>
-</html>
-`,
-    };
-}
 
 const createAcquiringOrder = async (req, res) => {
     const number = await NumberOfOrders.findOne({});
@@ -192,13 +157,10 @@ const createAcquiringOrder = async (req, res) => {
         await user.save();
     }
 
-    // Лист не повинен блокувати видачу посилання на оплату: рахунок у monobank
-    // уже створено, клієнту треба віддати pageUrl навіть при збої пошти.
-    try {
-        await sendEmail(buildAcceptedEmail(email, numberOfOrder));
-    } catch (error) {
-        logAcquiringError('accepted-email', error);
-    }
+    // ⚠️ Лист «замовлення прийнято, очікуємо оплату» більше не надсилається —
+    // з тієї самої причини, що й у controllers/orders.js: клієнта веде
+    // менеджер, а не автоматична пошта. Клієнт у цей момент і так іде на
+    // сторінку оплати monobank.
 
     notifyNewOrder(order);
 
