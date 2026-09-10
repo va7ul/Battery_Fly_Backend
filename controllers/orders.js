@@ -1,5 +1,4 @@
-const { ctrlWrapper, HttpError, sendEmail, notifyNewOrder, calculatePrepayment, getSettings } = require('../helpers');
-const { MAIL_USER } = process.env;
+const { ctrlWrapper, HttpError, notifyNewOrder, calculatePrepayment, getSettings } = require('../helpers');
 
 const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
@@ -134,45 +133,18 @@ const addOrder = async (req, res) => {
   
     
   
-    const today = new Date(Date.now());
-    const day = (`0${today.getDate()}`).slice(-2)  
-    const month = (`0${today.getMonth() + 1}`).slice(-2) 
-    const todayDate = (day + '.' + month + '.' + today.getFullYear());
-    const emailText = {
-    from: MAIL_USER,
-    to: email,
-    subject: `Ваше замовлення №${numberOfOrder} оформлено`,
-    html: `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//UK">
-<html lang="uk">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
-  </head>
-  <body style="width: 600px">
-    <b>Ваше замовлення успішно оформлене!</b>
-    <p>
-      Дякуємо за ваше замовлення в BatteryFly! Ми раді повідомити, що ваше
-      замовлення №${numberOfOrder} було успішно прийнято.
-    </p>
-    <p>
-      Незабаром ми зв’яжемось з вами для уточнення деталей та подальших кроків.
-    </p>
-    <p>
-      Якщо у вас виникли запитання, зв'яжіться з нашою підтримкою: <br />тел.
-      <a href="tel:+380509686485">+38(050)968-64-85</a> <br />e-mail
-      <a href="mailto:batteryfly@meta.ua">batteryfly@meta.ua</a>
-    </p>
-    <p>Дякуємо, що обрали BatteryFly!</p>
-    <hr />
-    <p>З повагою, <br />Команда BatteryFly</p>
-  </body>
-</html>
-`,
-    
-    };
-    
-    await sendEmail(emailText);
+    // ⚠️ Лист клієнту про оформлення замовлення СВІДОМО не надсилається.
+    //
+    // Рішення власника: інформувати про замовлення менеджер має особисто —
+    // дзвінком чи повідомленням, а не автоматичним листом, який однаково
+    // нічого не додає до того, що клієнт щойно бачив на екрані. Магазин про
+    // нове замовлення дізнається з Telegram (notifyNewOrder нижче) і з
+    // адмінки.
+    //
+    // Поштою лишається ТІЛЬКИ підтвердження адреси при реєстрації
+    // (controllers/auth.js, controllers/user.js). Не повертати сюди листи, не
+    // спитавши власника.
+
 
     // Без await: сповіщення не має додавати ~300мс до відповіді клієнту.
     // Хелпер ніколи не реджектиться, тож unhandled rejection тут неможливий.
