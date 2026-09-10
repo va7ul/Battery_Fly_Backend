@@ -92,7 +92,16 @@ function redeliverySum(order) {
 //
 // Зібрано в окремій функції, щоб payload було видно одним шматком: саме його
 // доводиться звіряти з відповіддю Пошти, коли вона щось відхиляє.
-function buildTtnPayload({ order, sender, recipient, city, warehouse, manual }) {
+function buildTtnPayload({
+  order,
+  sender,
+  senderCity,
+  senderWarehouse,
+  recipient,
+  city,
+  warehouse,
+  manual,
+}) {
   const payload = {
     // Платить отримувач — рішення власника. Готівкою на відділенні.
     PayerType: 'Recipient',
@@ -107,9 +116,9 @@ function buildTtnPayload({ order, sender, recipient, city, warehouse, manual }) 
     Description: manual.description,
     Cost: String(manual.cost),
 
-    CitySender: sender.cityRef,
+    CitySender: senderCity.ref,
     Sender: sender.counterpartyRef,
-    SenderAddress: sender.warehouseRef,
+    SenderAddress: senderWarehouse.ref,
     ContactSender: sender.contactRef,
     SendersPhone: normalizePhone(sender.phone),
 

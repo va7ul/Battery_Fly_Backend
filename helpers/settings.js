@@ -55,9 +55,7 @@ function toPlainSettings(settings) {
       contactRef: settings.npSender?.contactRef || '',
       contactName: settings.npSender?.contactName || '',
       phone: settings.npSender?.phone || '',
-      cityRef: settings.npSender?.cityRef || '',
       cityName: settings.npSender?.cityName || '',
-      warehouseRef: settings.npSender?.warehouseRef || '',
       warehouseName: settings.npSender?.warehouseName || '',
     },
     npDefaults: {
@@ -74,12 +72,16 @@ function toPlainSettings(settings) {
 // внутрішнє «Sender not found» замість зрозумілого «заповніть відправника».
 function getMissingSenderFields(settings) {
   const sender = settings.npSender || {};
+  // ⚠️ Місто й відділення перевіряються за НАЗВОЮ, а не за Ref. Ref для
+  // адреси відправника ніде не зберігається — його резолвить create-ttn, рівно
+  // тим самим механізмом, що й для адреси отримувача. Тримати Ref у
+  // налаштуваннях означало б другий спосіб отримати те саме значення.
   const required = [
     ['counterpartyRef', 'контрагент-відправник'],
     ['contactRef', 'контактна особа'],
     ['phone', 'телефон відправника'],
-    ['cityRef', 'місто відправлення'],
-    ['warehouseRef', 'відділення відправлення'],
+    ['cityName', 'місто відправлення'],
+    ['warehouseName', 'відділення відправлення'],
   ];
 
   return required.filter(([key]) => !sender[key]).map(([, label]) => label);

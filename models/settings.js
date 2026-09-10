@@ -52,10 +52,12 @@ const settingsSchema = new Schema(
       contactRef: { type: String, default: '' },
       contactName: { type: String, default: '' },
       phone: { type: String, default: '' },
-      // Місто й відділення відправлення.
-      cityRef: { type: String, default: '' },
+      // Місто й відділення відправлення — НАЗВАМИ.
+      //
+      // ⚠️ Ref тут свідомо немає: адресу відправника резолвить create-ttn за
+      // назвою, так само як адресу отримувача. Два джерела одного Ref рано чи
+      // пізно розійшлися б, а одне з них — ще й непомітно порожнє.
       cityName: { type: String, default: '' },
-      warehouseRef: { type: String, default: '' },
       warehouseName: { type: String, default: '' },
     },
 
