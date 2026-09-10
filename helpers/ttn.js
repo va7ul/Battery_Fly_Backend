@@ -122,6 +122,45 @@ function buildOptionsSeat({ seatsAmount, weight, width, length, height }) {
   return { optionsSeat: місця, volumeGeneral: round(volumePerSeat * seatsAmount) };
 }
 
+// Чому Пошта відхилила накладений платіж.
+//
+// ⚠️ Відмова тут — це НЕ про payload, а про договір. Звичайна накладна з тими
+// самими даними створюється; ламається лише накладений платіж. І «Післяплата»,
+// і «Контроль оплати» — окремі послуги, які вмикає менеджер Нової Пошти, а для
+// Контролю оплати потрібен ще договір із NovaPay.
+//
+// Питаємо в Пошти прямо, чи підключена послуга, щоб не радити менеджеру
+// «зверніться до НП», коли річ насправді в іншому. Перевірка НЕ обов'язкова:
+// якщо вона сама впаде, повідомлення просто лишиться загальнішим.
+async function explainRedeliveryRefusal(counterpartyRef) {
+  const загальне =
+    'Нова Пошта відхилила накладений платіж: послуга «Контроль оплати» недоступна. ' +
+    'Її підключає менеджер Нової Пошти, і потрібен ще окремий договір із NovaPay — ' +
+    'саме на той рахунок надходять гроші. ' +
+    'Поки її немає — створіть накладну без накладеного платежу (вкажіть у полі 0) ' +
+    'і візьміть оплату іншим способом.';
+
+  try {
+    const options = await npPost('Counterparty', 'getCounterpartyOptions', {
+      Ref: counterpartyRef,
+    });
+    const доступна = options[0] && options[0].CanAfterpaymentOnGoodsCost;
+
+    if (доступна === false) {
+      return (
+        'Послуга «Контроль оплати» не підключена для вашого контрагента в Новій Пошті ' +
+        '(CanAfterpaymentOnGoodsCost = false). Її вмикає менеджер НП, і потрібен ще ' +
+        'договір із NovaPay. Поки її немає — створіть накладну без накладеного платежу ' +
+        '(вкажіть у полі 0).'
+      );
+    }
+  } catch (error) {
+    console.error('[ttn] не вдалося перевірити опції контрагента:', error.message);
+  }
+
+  return загальне;
+}
+
 // methodProperties для InternetDocument.save.
 //
 // Зібрано в окремій функції, щоб payload було видно одним шматком: саме його
@@ -173,21 +212,24 @@ function buildTtnPayload({
   };
 
   if (manual.codAmount) {
-    // CargoType 'Money' — грошовий переказ назад відправнику. Комісію за
-    // переказ платить отримувач.
-    payload.BackwardDeliveryData = [
-      {
-        PayerType: 'Recipient',
-        CargoType: 'Money',
-        RedeliveryString: String(manual.codAmount),
-      },
-    ];
+    // ⚠️ Контроль оплати, а НЕ післяплата. Це дві різні послуги Пошти з
+    // різними полями й різним рухом грошей:
+    //
+    //   Післяплата      → BackwardDeliveryData[{CargoType:'Money'}]
+    //                     переказ, який відправник забирає у відділенні;
+    //   Контроль оплати → AfterpaymentOnGoodsCost
+    //                     гроші йдуть на банківський рахунок магазину.
+    //
+    // Власник підключає саме Контроль оплати — для магазину гроші на рахунку
+    // краще за готівку у відділенні. Обидва поля разом НЕ шлемо.
+    payload.AfterpaymentOnGoodsCost = manual.codAmount;
   }
 
   return payload;
 }
 
 module.exports = {
+  explainRedeliveryRefusal,
   buildOptionsSeat,
   normalizePhone,
   todayForNp,

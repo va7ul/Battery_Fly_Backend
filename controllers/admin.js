@@ -26,6 +26,7 @@ const {
   ensureRecipient,
   redeliverySum,
   buildTtnPayload,
+  explainRedeliveryRefusal,
 } = require('../helpers/ttn');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
@@ -1360,7 +1361,20 @@ const createOrderTtn = async (req, res) => {
     });
   } catch (error) {
     if (error instanceof NovaPoshtaError) {
-      // Текст Пошти йде до менеджера як є: саме він каже, що виправити.
+      // Єдиний випадок, коли текст Пошти замінюємо своїм: «Передана послуга
+      // Післяплата недоступна» нічого не каже про те, ЩО робити, і виглядає
+      // як помилка в даних — хоча це питання договору з Поштою.
+      const проПісляплату =
+        error.errorCodes.includes('20000204637') || /Післяплат/i.test(error.message);
+
+      if (проПісляплату && manual.codAmount) {
+        throw HttpError(
+          502,
+          await explainRedeliveryRefusal(settings.npSender.counterpartyRef)
+        );
+      }
+
+      // Решта — текстом Пошти як є: саме він каже, що виправити.
       throw HttpError(502, `Нова Пошта: ${error.message}`);
     }
 
