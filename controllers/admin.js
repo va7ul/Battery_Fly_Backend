@@ -1383,13 +1383,31 @@ const getNovaPoshtaSenders = async (req, res) => {
     // Контакти запитуються на кожного контрагента окремо — свого «дай усе
     // одразу» метода Пошта не має. Відправників у кабінету одиниці, тож
     // послідовні виклики тут дешевші за складність.
+    //
+    // ⚠️ Модель саме `Counterparty`, а НЕ `ContactPerson`. Назва методу читається
+    // як «контактні особи контрагента», і модель ContactPerson напрошується сама
+    // — але там живуть лише save/update/delete. Пошта на помилку відповідає
+    // «Method ContactPersonGeneral_getCounterpartyContactPersons not found»:
+    // вона складає внутрішню назву як <Модель>General_<метод>, тож у тексті
+    // помилки видно, в якій саме моделі шукали.
     const result = [];
 
     for (const party of counterparties) {
-      const contacts = await npPost('ContactPerson', 'getCounterpartyContactPersons', {
-        Ref: party.Ref,
-        Page: '1',
-      });
+      let contacts = [];
+
+      try {
+        contacts = await npPost('Counterparty', 'getCounterpartyContactPersons', {
+          Ref: party.Ref,
+          Page: '1',
+        });
+      } catch (contactsError) {
+        // Один проблемний контрагент не має ховати решту списку: краще
+        // показати його без контактів, ніж лишити налаштування порожніми.
+        console.error(
+          `[getNovaPoshtaSenders] контакти для ${party.Ref} не отримано:`,
+          contactsError.message
+        );
+      }
 
       result.push({
         ref: party.Ref,
