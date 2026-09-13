@@ -28,6 +28,8 @@ const {
   buildTtnPayload,
   explainRedeliveryRefusal,
 } = require('../helpers/ttn');
+const { Contact } = require('../models/contact');
+const { normalizePhone } = require('../helpers/phone');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -1209,6 +1211,275 @@ const updateShopSettings = async (req, res) => {
   res.status(200).json({ result: toPlainSettings(settings) });
 };
 
+// ─── Клієнти CRM ────────────────────────────────────────────────────────────
+//
+// ⚠️ Це НЕ те саме, що getUsers нижче. Той віддає акаунти на сайті (`User`) —
+// їх мають лише зареєстровані. Contact охоплює всіх, хто замовляв, і доданих
+// руками. В адмінці вони живуть двома вкладками одного розділу.
+
+// Скільки замовлень і на яку суму — щоб у списку було видно цінність клієнта.
+//
+// ⚠️ Шукаємо і за contactId, І за телефоном. Замовлення до появи CRM
+// contactId не мають, і без другої умови картка клієнта показувала б порожню
+// історію в того, хто замовляв роками.
+async function loadContactOrders(contact) {
+  const digits = contact.phones.map(phone => phone.digits).filter(Boolean);
+  const умови = [{ contactId: contact._id }];
+
+  if (digits.length > 0) {
+    // Телефон у замовленні зберігається як введений, тож нормалізуємо на льоту
+    // регуляркою по цифрах — індексу тут немає, але й замовлень на клієнта
+    // одиниці.
+    умови.push({ tel: { $in: digits.flatMap(вибірДляТелефону) } });
+  }
+
+  return Order.find({ $or: умови }).sort({ createdAt: -1 });
+}
+
+// Варіанти написання того самого номера, які трапляються в замовленнях.
+function вибірДляТелефону(digits) {
+  const без380 = digits.replace(/^380/, '');
+
+  return [
+    digits,
+    `+${digits}`,
+    `0${без380}`,
+    new RegExp(`${без380}$`),
+  ];
+}
+
+const getContacts = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { search = '', type, kind, page = 1, limit = 50 } = req.query;
+  const filter = {};
+
+  if (type) filter.type = type;
+  if (kind) filter.kind = kind;
+
+  const query = String(search).trim();
+
+  if (query) {
+    // Пошук за номером має працювати в БУДЬ-ЯКОМУ написанні, тому цифри
+    // шукаємо окремо від тексту.
+    const digits = normalizePhone(query);
+    const текст = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
+    filter.$or = [
+      { name: текст },
+      { company: текст },
+      { email: текст },
+      ...(digits ? [{ 'phones.digits': digits }] : []),
+    ];
+  }
+
+  const перPage = Math.min(Number(limit) || 50, 200);
+  const пропустити = (Math.max(Number(page) || 1, 1) - 1) * перPage;
+
+  const [contacts, total] = await Promise.all([
+    Contact.find(filter).sort({ updatedAt: -1 }).skip(пропустити).limit(перPage),
+    Contact.countDocuments(filter),
+  ]);
+
+  // Підсумки по замовленнях — по одному запиту на клієнта сторінки. Сторінка
+  // невелика, а зводити це в агрегацію довелось би через два різні способи
+  // зв'язку (contactId і телефон), що читалось би гірше за користь.
+  const result = await Promise.all(
+    contacts.map(async contact => {
+      const orders = await loadContactOrders(contact);
+
+      return {
+        ...contact.toObject(),
+        primaryPhone: contact.primaryPhone(),
+        ordersCount: orders.length,
+        ordersTotal: orders.reduce((sum, order) => sum + (Number(order.together) || 0), 0),
+      };
+    })
+  );
+
+  res.status(200).json({ result, total });
+};
+
+const getContactById = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    throw HttpError(404, 'Клієнта не знайдено');
+  }
+
+  const orders = await loadContactOrders(contact);
+
+  res.status(200).json({
+    result: {
+      ...contact.toObject(),
+      primaryPhone: contact.primaryPhone(),
+      orders: orders.map(order => ({
+        _id: order._id,
+        numberOfOrder: order.numberOfOrder,
+        createdAt: order.createdAt,
+        status: order.status,
+        payment: order.payment,
+        together: order.together,
+        // Прив'язане явно чи знайдене за телефоном — менеджеру варто бачити
+        // різницю: друге можна закріпити ручною прив'язкою.
+        linked: String(order.contactId || '') === String(contact._id),
+      })),
+      ordersCount: orders.length,
+      ordersTotal: orders.reduce((sum, order) => sum + (Number(order.together) || 0), 0),
+    },
+  });
+};
+
+// Поля, які адмінка має право записати. Усе інше з тіла ігнорується: форма
+// шле назад увесь об'єкт, і без білого списку в документ потрапляло б сміття.
+function pickContactFields(body) {
+  const fields = {};
+
+  ['name', 'email', 'company', 'note', 'type', 'kind'].forEach(key => {
+    if (body[key] !== undefined) {
+      if (typeof body[key] !== 'string') {
+        throw HttpError(400, `${key} має бути рядком`);
+      }
+
+      fields[key] = body[key].trim();
+    }
+  });
+
+  if (fields.type && !['site', 'manual'].includes(fields.type)) {
+    throw HttpError(400, 'type має бути site або manual');
+  }
+
+  if (fields.kind && !['retail', 'wholesale'].includes(fields.kind)) {
+    throw HttpError(400, 'kind має бути retail або wholesale');
+  }
+
+  if (body.phones !== undefined) {
+    if (!Array.isArray(body.phones)) {
+      throw HttpError(400, 'phones має бути масивом');
+    }
+
+    fields.phones = body.phones
+      .map(phone => ({
+        number: String(phone && phone.number ? phone.number : '').trim(),
+        isPrimary: Boolean(phone && phone.isPrimary),
+      }))
+      .filter(phone => phone.number);
+  }
+
+  return fields;
+}
+
+const createContact = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const fields = pickContactFields(req.body);
+
+  if (!fields.name) {
+    throw HttpError(400, 'Вкажіть імʼя клієнта');
+  }
+
+  // Створений руками — за замовчуванням саме такий тип, якщо не сказано інше.
+  const contact = await Contact.create({ type: 'manual', ...fields });
+
+  res.status(201).json({ result: contact });
+};
+
+const updateContact = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    throw HttpError(404, 'Клієнта не знайдено');
+  }
+
+  Object.assign(contact, pickContactFields(req.body));
+  // save(), а не findByIdAndUpdate: нормалізація телефонів живе в pre-validate
+  // моделі, і оновлення повз документ її оминуло б.
+  await contact.save();
+
+  res.status(200).json({ result: contact });
+};
+
+const deleteContact = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    throw HttpError(404, 'Клієнта не знайдено');
+  }
+
+  // ⚠️ Замовлення НЕ видаляємо — лише відв'язуємо. Видалення картки клієнта не
+  // має знищувати історію продажів.
+  await Order.updateMany({ contactId: contact._id }, { $set: { contactId: null } });
+  await contact.deleteOne();
+
+  res.status(200).json({ result: { _id: contact._id } });
+};
+
+// Ручна прив'язка замовлення до клієнта — коли авто за телефоном не спрацювала
+// (людина замовила з іншого номера) або прив'язалась не до того.
+const setOrderContact = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { contactId } = req.body;
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  if (contactId) {
+    const contact = await Contact.findById(contactId);
+
+    if (!contact) {
+      throw HttpError(404, 'Клієнта не знайдено');
+    }
+
+    order.contactId = contact._id;
+  } else {
+    // Порожнє значення = відв'язати.
+    order.contactId = null;
+  }
+
+  await order.save();
+
+  res.status(200).json({ result: { numberOfOrder: order.numberOfOrder, contactId: order.contactId } });
+};
+
 // Формування ТТН Нової Пошти для замовлення.
 //
 // ⚠️ Статус замовлення тут НЕ змінюється — свідомо. Перехід у «Відправлено»
@@ -1628,6 +1899,12 @@ module.exports = {
   updateShopSettings: ctrlWrapper(updateShopSettings),
   getNovaPoshtaSenders: ctrlWrapper(getNovaPoshtaSenders),
   createOrderTtn: ctrlWrapper(createOrderTtn),
+  getContacts: ctrlWrapper(getContacts),
+  getContactById: ctrlWrapper(getContactById),
+  createContact: ctrlWrapper(createContact),
+  updateContact: ctrlWrapper(updateContact),
+  deleteContact: ctrlWrapper(deleteContact),
+  setOrderContact: ctrlWrapper(setOrderContact),
   getCounters: ctrlWrapper(getCounters),
   markOrderViewed: ctrlWrapper(markOrderViewed),
   markPrint3dViewed: ctrlWrapper(markPrint3dViewed),
