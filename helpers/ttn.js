@@ -1,28 +1,7 @@
 const { npPost, resolveCityRef, resolveWarehouse, NovaPoshtaError } = require('./novaposhta');
 const { CASH_ON_DELIVERY } = require('./orderStatus');
-
-// Телефон для Пошти — 12 цифр, що починаються з 380.
-//
-// У замовленні він лежить у вигляді «+380671234567», але через кабінет і старі
-// записи трапляються пробіли, дужки й дефіси. Пошта такий рядок відхиляє
-// глухим «Phone is not valid», тож зводимо до цифр тут.
-function normalizePhone(value) {
-  const digits = String(value || '').replace(/\D/g, '');
-
-  if (digits.length === 12 && digits.startsWith('380')) {
-    return digits;
-  }
-
-  if (digits.length === 10 && digits.startsWith('0')) {
-    return `38${digits}`;
-  }
-
-  if (digits.length === 9) {
-    return `380${digits}`;
-  }
-
-  return digits;
-}
+// Спільний нормалізатор: той самий, яким CRM шукає клієнта за телефоном.
+const { normalizePhone } = require('./phone');
 
 // Дата відправлення у форматі Пошти — дд.мм.рррр.
 function todayForNp() {

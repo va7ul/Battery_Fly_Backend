@@ -48,6 +48,17 @@ router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
 // оновлення замовлення, тим самим шляхом, що й при ручному вводі номера.
 router.post('/orders/:numberOfOrder/create-ttn', authAdm, ctrl.createOrderTtn);
 
+// ─── Клієнти CRM ────────────────────────────────────────────────────────────
+// Не плутати з /users: там акаунти на сайті, тут — усі, хто замовляв.
+router.get('/contacts', authAdm, ctrl.getContacts);
+router.post('/contacts', authAdm, ctrl.createContact);
+router.get('/contacts/:id', authAdm, ctrl.getContactById);
+router.put('/contacts/:id', authAdm, ctrl.updateContact);
+router.delete('/contacts/:id', authAdm, ctrl.deleteContact);
+
+// Ручна прив'язка замовлення до клієнта.
+router.patch('/orders/:numberOfOrder/contact', authAdm, ctrl.setOrderContact);
+
 
 
 

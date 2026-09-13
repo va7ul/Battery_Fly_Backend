@@ -12,6 +12,7 @@ const {
     shouldSyncStatus,
 } = require('../helpers/acquiring');
 const { Order } = require('../models/order');
+const { attachContactToOrder } = require('../helpers/contacts');
 const { NumberOfOrders } = require('../models/numberOfOrders');
 const { PromoCode } = require('../models/promoCode');
 const { User } = require('../models/user');
@@ -86,8 +87,14 @@ const createAcquiringOrder = async (req, res) => {
     // invoiceId відомий лише з відповіді на нього.
     const publicRef = generatePublicRef();
 
+    // Клієнт CRM. Шукаємо за телефоном, не знайшли — заводимо нового.
+    // Збій тут замовлення не валить: прив'язка внутрішня, і незв'язане
+    // замовлення лагодиться ручною прив'язкою або скриптом.
+    const contactId = await attachContactToOrder({ tel, firstName, lastName, email });
+
     const order = await Order.create({
         numberOfOrder,
+        contactId,
         firstName,
         lastName,
         email,

@@ -1,6 +1,7 @@
 const { ctrlWrapper, HttpError, notifyNewOrder } = require('../helpers');
 const { monopayPost, buildCreatePayload, buildOrderIdPayload, buildReturnPayload, verifyCallbackSignature } = require('../helpers/monopay');
 const { Order } = require('../models/order');
+const { attachContactToOrder } = require('../helpers/contacts');
 const { NumberOfOrders } = require('../models/numberOfOrders');
 
 function logMonopayError(context, error) {
@@ -23,8 +24,14 @@ const createMonopayOrder = async (req, res) => {
 
     const { userData: { firstName, lastName, email, text, tel }, total, cartItems, deliveryType, city, warehouse, promoCode, promoCodeDiscount, discountValue, together, payParts } = req.body;
 
+    // Клієнт CRM. Шукаємо за телефоном, не знайшли — заводимо нового.
+    // Збій тут замовлення не валить: прив'язка внутрішня, і незв'язане
+    // замовлення лагодиться ручною прив'язкою або скриптом.
+    const contactId = await attachContactToOrder({ tel, firstName, lastName, email });
+
     const order = await Order.create({
         numberOfOrder,
+        contactId,
         firstName,
         lastName,
         email,

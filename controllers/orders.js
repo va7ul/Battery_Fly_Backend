@@ -4,6 +4,7 @@ const {PromoCode} = require('../models/promoCode')
 const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
+const { attachContactToOrder } = require('../helpers/contacts');
 const { User } = require('../models/user');
 const { QuickOrder } = require('../models/quickOrder');
 
@@ -105,6 +106,12 @@ const addOrder = async (req, res) => {
         // налаштуваннях; find-or-create гарантує документ навіть на свіжій базі.
         prepaymentAmount: calculatePrepayment(payment, together, shopSettings.prepaymentPercent)
     }
+
+    // Клієнт CRM. Шукаємо за телефоном, не знайшли — заводимо нового.
+    // Збій тут замовлення не валить: прив'язка внутрішня, і незв'язане
+    // замовлення лагодиться ручною прив'язкою або скриптом.
+    finalyOrder.contactId = await attachContactToOrder({ tel, firstName, lastName, email });
+
     const order = await Order.create({ ...finalyOrder })
 
     if (promoCode) {
