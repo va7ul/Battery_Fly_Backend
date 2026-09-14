@@ -1702,8 +1702,41 @@ const getFunnel = async (req, res) => {
     });
   }
 
-  res.status(200).json({ result: board });
+  res.status(200).json({ result: board, reminders: await зібратиНагадування() });
 };
+
+// Кого час набрати: дата настала або вже минула.
+//
+// ⚠️ Їде разом із дошкою, а не окремим запитом. Блок нагадувань живе вгорі тієї
+// самої сторінки, і другий круговий запит заради списку з трьох рядків дав би
+// видиме мигтіння там, де все могло приїхати одразу.
+//
+// ⚠️ Беремо ВСІХ, у кого настала дата, — навіть тих, кого на дошці немає. Клієнт
+// міг купити й вийти з воронки, поки домовленість передзвонити лишалась; забути
+// про неї через те, що картка зникла, — саме те, чого нагадування й мають не
+// допустити.
+async function зібратиНагадування() {
+  const clients = await Contact.find({
+    nextContactDate: { $ne: null, $lte: new Date() },
+  })
+    .sort({ nextContactDate: 1 })
+    .limit(50);
+
+  return clients.map(contact => ({
+    _id: contact._id,
+    name: contact.name,
+    company: contact.company,
+    primaryPhone: contact.primaryPhone(),
+    nextContactDate: contact.nextContactDate,
+    // Звідки взялось нагадування — щоб менеджер знав, з чим дзвонить.
+    reason: contact.reactivationSince
+      ? 'reactivation'
+      : contact.funnelStage === 'lost'
+      ? 'lost'
+      : 'manual',
+    lostReason: contact.lostReason,
+  }));
+}
 
 // Зміна стадії — і з дошки, і з картки клієнта.
 const setContactStage = async (req, res) => {
@@ -2163,14 +2196,20 @@ const getCounters = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const [orders, print3d, feedback] = await Promise.all([
+  const [orders, print3d, feedback, reminders] = await Promise.all([
     Order.countDocuments(UNVIEWED),
     Print3dOrder.countDocuments(UNVIEWED),
     FeedBack.countDocuments(UNVIEWED),
+    // ⚠️ Це НЕ «непереглянуте». Три лічильники вище знімаються кнопкою
+    // «переглянуто» й зменшуються в адмінці локально; цей — обчислюваний стан
+    // («час дзвонити»), і зникає лише тоді, коли менеджер справді зняв або
+    // переніс дату. Тому для нього немає markViewed і його не можна віднімати
+    // локально — тільки перечитувати.
+    Contact.countDocuments({ nextContactDate: { $ne: null, $lte: new Date() } }),
   ]);
 
   res.status(200).json({
-    result: { orders, print3d, feedback },
+    result: { orders, print3d, feedback, reminders },
   });
 };
 
