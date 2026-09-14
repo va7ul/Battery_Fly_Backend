@@ -2,6 +2,7 @@ const { ctrlWrapper, HttpError, notifyNewOrder } = require('../helpers');
 const { monopayPost, buildCreatePayload, buildOrderIdPayload, buildReturnPayload, verifyCallbackSignature } = require('../helpers/monopay');
 const { Order } = require('../models/order');
 const { attachContactToOrder } = require('../helpers/contacts');
+const { logOrderCreated } = require('../helpers/activities');
 const { NumberOfOrders } = require('../models/numberOfOrders');
 
 function logMonopayError(context, error) {
@@ -55,6 +56,8 @@ const createMonopayOrder = async (req, res) => {
     if (!order) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
+
+    await logOrderCreated(order);
 
     const payload = buildCreatePayload({
         storeOrderId: numberOfOrder,
