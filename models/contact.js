@@ -1,6 +1,7 @@
 const { Schema, model } = require('mongoose');
 
 const { normalizePhone } = require('../helpers/phone');
+const { FUNNEL_STAGES } = require('../helpers/funnel');
 
 // Клієнт CRM.
 //
@@ -58,8 +59,27 @@ const contactSchema = new Schema(
     company: { type: String, default: '', trim: true },
     note: { type: String, default: '' },
 
-    // Під Етап 2 (воронка). Поле є вже зараз, щоб потім не мігрувати базу.
-    funnelStage: { type: String, default: 'new' },
+    // Стадія воронки продажів. Значення — з helpers/funnel.js.
+    //
+    // ⚠️ Поле є в УСІХ клієнтів, але сенс має лише в учасників воронки
+    // (оптові й заведені вручну — див. isInFunnel). У роздрібного з сайту тут
+    // лежить 'new', якого ніхто ніколи не побачить: на дошку він не потрапляє.
+    // Заводити поле лише частині документів було б гірше — запити довелось би
+    // писати з оглядкою на його відсутність.
+    funnelStage: {
+      type: String,
+      enum: FUNNEL_STAGES,
+      default: 'new',
+      index: true,
+    },
+    // Коли повернутись до розмови. Заповнюється при «Відмові» — щоб клієнт, який
+    // сказав «не зараз», не загубився назавжди.
+    //
+    // ⚠️ Тут лише ЗБЕРІГАЄТЬСЯ. Показ нагадувань («сьогодні контактувати») —
+    // окремий етап; поле заведене зараз, щоб потім не мігрувати базу.
+    nextContactDate: { type: Date, default: null },
+    // Причина відмови, як її записав менеджер.
+    lostReason: { type: String, default: null },
   },
   { versionKey: false, timestamps: true }
 );

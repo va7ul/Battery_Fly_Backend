@@ -30,6 +30,12 @@ const {
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
+const {
+  FUNNEL_STAGES,
+  FUNNEL_QUERY,
+  isInFunnel,
+  startingStage,
+} = require('../helpers/funnel');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
 const { Product } = require('../models/product');
@@ -1248,6 +1254,63 @@ function вибірДляТелефону(digits) {
   ];
 }
 
+// Замовлення ВСІХ клієнтів воронки — одним запитом замість запиту на клієнта.
+//
+// getContacts дозволяє собі N запитів свідомо: там сторінка на 50. Дошка ж
+// показує воронку цілком і не гортається — сотня оптовиків перетворилась би на
+// сотню запитів при кожному відкритті вкладки.
+async function loadOrdersTotals(contacts) {
+  const заТелефоном = new Map();
+  const варіантиТелефонів = [];
+  const ids = contacts.map(contact => contact._id);
+  const наші = new Set(ids.map(String));
+
+  contacts.forEach(contact => {
+    contact.phones.forEach(phone => {
+      if (!phone.digits) {
+        return;
+      }
+
+      заТелефоном.set(phone.digits, String(contact._id));
+      варіантиТелефонів.push(...вибірДляТелефону(phone.digits));
+    });
+  });
+
+  const orders = await Order.find({
+    $or: [
+      { contactId: { $in: ids } },
+      ...(варіантиТелефонів.length > 0
+        ? [{ tel: { $in: варіантиТелефонів } }]
+        : []),
+    ],
+  }).select('contactId tel together');
+
+  const підсумки = new Map();
+
+  orders.forEach(order => {
+    // ⚠️ Спершу пряма прив'язка, і лише потім телефон. Замовлення, що підходить
+    // під обидві умови, інакше порахувалося б двічі. А прив'язка може вести й
+    // до клієнта ПОЗА воронкою (спільний номер) — тоді падаємо назад на телефон.
+    const прямо = order.contactId ? String(order.contactId) : null;
+    const id =
+      прямо && наші.has(прямо)
+        ? прямо
+        : заТелефоном.get(normalizePhone(order.tel));
+
+    if (!id || !наші.has(id)) {
+      return;
+    }
+
+    const поточне = підсумки.get(id) || { ordersCount: 0, ordersTotal: 0 };
+
+    поточне.ordersCount += 1;
+    поточне.ordersTotal += Number(order.together) || 0;
+    підсумки.set(id, поточне);
+  });
+
+  return підсумки;
+}
+
 const getContacts = async (req, res) => {
   const { token } = req.user;
   const admin = await Admin.findOne({ token });
@@ -1398,6 +1461,16 @@ const createContact = async (req, res) => {
   // Створений руками — за замовчуванням саме такий тип, якщо не сказано інше.
   const contact = await Contact.create({ type: 'manual', ...fields });
 
+  // ⚠️ Клієнт міг замовляти й ДО того, як його завели в CRM: менеджер вписує
+  // телефон, за яким у базі вже є покупки. Такий одразу в «Співпрацюємо», а не
+  // в «Новий лід» — продавати йому вже нічого не треба.
+  if (isInFunnel(contact)) {
+    const orders = await loadContactOrders(contact);
+
+    contact.funnelStage = startingStage(orders.length > 0);
+    await contact.save();
+  }
+
   res.status(201).json({ result: contact });
 };
 
@@ -1415,7 +1488,21 @@ const updateContact = async (req, res) => {
     throw HttpError(404, 'Клієнта не знайдено');
   }
 
+  // Чи був клієнт у воронці ДО правки — щоб побачити сам момент входу.
+  const бувУВоронці = isInFunnel(contact);
+
   Object.assign(contact, pickContactFields(req.body));
+
+  // ⚠️ Стадію чіпаємо РІВНО в момент входу у воронку — коли роздрібного з сайту
+  // позначили оптовиком або перевели в ручні. Робити це на кожне збереження не
+  // можна: менеджер, який виправив друкарську помилку в імені клієнта на
+  // стадії «Перемовини», відкинув би його назад.
+  if (!бувУВоронці && isInFunnel(contact)) {
+    const orders = await loadContactOrders(contact);
+
+    contact.funnelStage = startingStage(orders.length > 0);
+  }
+
   // save(), а не findByIdAndUpdate: нормалізація телефонів живе в pre-validate
   // моделі, і оновлення повз документ її оминуло б.
   await contact.save();
@@ -1443,6 +1530,117 @@ const deleteContact = async (req, res) => {
   await contact.deleteOne();
 
   res.status(200).json({ result: { _id: contact._id } });
+};
+
+// Дошка воронки: учасники, згруповані за стадією.
+//
+// Повертаємо ВСІ стадії, зокрема порожні: колонка без клієнтів — теж
+// інформація («пропозицій ніхто не чекає»), а дошка, у якої колонки то
+// з'являються, то зникають, читається як зламана.
+const getFunnel = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const contacts = await Contact.find(FUNNEL_QUERY).sort({ updatedAt: -1 });
+  const підсумки = await loadOrdersTotals(contacts);
+
+  const board = Object.fromEntries(FUNNEL_STAGES.map(stage => [stage, []]));
+
+  contacts.forEach(contact => {
+    // Невідома стадія (лишок від ручної правки бази) не має ховати клієнта з
+    // дошки — показуємо його на початку воронки.
+    const stage = FUNNEL_STAGES.includes(contact.funnelStage)
+      ? contact.funnelStage
+      : FUNNEL_STAGES[0];
+
+    const totals = підсумки.get(String(contact._id)) || {
+      ordersCount: 0,
+      ordersTotal: 0,
+    };
+
+    board[stage].push({
+      _id: contact._id,
+      name: contact.name,
+      company: contact.company,
+      type: contact.type,
+      kind: contact.kind,
+      funnelStage: stage,
+      primaryPhone: contact.primaryPhone(),
+      nextContactDate: contact.nextContactDate,
+      lostReason: contact.lostReason,
+      ...totals,
+    });
+  });
+
+  res.status(200).json({ result: board });
+};
+
+// Зміна стадії — і з дошки, і з картки клієнта.
+const setContactStage = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { funnelStage, nextContactDate, lostReason } = req.body;
+
+  if (!FUNNEL_STAGES.includes(funnelStage)) {
+    throw HttpError(400, 'Невідома стадія воронки');
+  }
+
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    throw HttpError(404, 'Клієнта не знайдено');
+  }
+
+  // ⚠️ Стадію отримують лише учасники воронки. Інакше роздрібний з сайту тихо
+  // отримав би стадію, якої ніде не видно, — і ніхто б не зрозумів, звідки
+  // вона взялась, коли його згодом зроблять оптовиком.
+  if (!isInFunnel(contact)) {
+    throw HttpError(
+      400,
+      'Воронка лише для оптових клієнтів і заведених вручну'
+    );
+  }
+
+  contact.funnelStage = funnelStage;
+
+  // ⚠️ Причина відмови й дата повернення живуть РІВНО поки клієнт у «Відмові».
+  // Повернули в роботу — обидва поля чистяться: «відмовив, бо дорого» біля
+  // клієнта, з яким знову ведуть перемовини, дезінформує, а нагадування
+  // передзвонити стосувалось саме тієї відмови.
+  if (funnelStage === 'lost') {
+    contact.lostReason =
+      typeof lostReason === 'string' && lostReason.trim()
+        ? lostReason.trim()
+        : null;
+
+    if (nextContactDate) {
+      const дата = new Date(nextContactDate);
+
+      if (Number.isNaN(дата.getTime())) {
+        throw HttpError(400, 'Некоректна дата повторного контакту');
+      }
+
+      contact.nextContactDate = дата;
+    } else {
+      contact.nextContactDate = null;
+    }
+  } else {
+    contact.lostReason = null;
+    contact.nextContactDate = null;
+  }
+
+  await contact.save();
+
+  res.status(200).json({ result: contact });
 };
 
 // Ручна прив'язка замовлення до клієнта — коли авто за телефоном не спрацювала
@@ -1905,6 +2103,8 @@ module.exports = {
   updateContact: ctrlWrapper(updateContact),
   deleteContact: ctrlWrapper(deleteContact),
   setOrderContact: ctrlWrapper(setOrderContact),
+  getFunnel: ctrlWrapper(getFunnel),
+  setContactStage: ctrlWrapper(setContactStage),
   getCounters: ctrlWrapper(getCounters),
   markOrderViewed: ctrlWrapper(markOrderViewed),
   markPrint3dViewed: ctrlWrapper(markPrint3dViewed),

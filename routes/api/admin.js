@@ -59,6 +59,11 @@ router.delete('/contacts/:id', authAdm, ctrl.deleteContact);
 // Ручна прив'язка замовлення до клієнта.
 router.patch('/orders/:numberOfOrder/contact', authAdm, ctrl.setOrderContact);
 
+// Воронка продажів. Дошка окремим роутом, а не параметром до /contacts:
+// повертає інший формат (згруповано за стадіями) і інший набір клієнтів.
+router.get('/funnel', authAdm, ctrl.getFunnel);
+router.patch('/contacts/:id/stage', authAdm, ctrl.setContactStage);
+
 
 
 
