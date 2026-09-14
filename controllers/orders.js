@@ -5,6 +5,7 @@ const { Order } = require('../models/order');
 const {NumberOfOrders} = require('../models/numberOfOrders');
 const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
 const { attachContactToOrder } = require('../helpers/contacts');
+const { logOrderCreated } = require('../helpers/activities');
 const { User } = require('../models/user');
 const { QuickOrder } = require('../models/quickOrder');
 
@@ -113,6 +114,8 @@ const addOrder = async (req, res) => {
     finalyOrder.contactId = await attachContactToOrder({ tel, firstName, lastName, email });
 
     const order = await Order.create({ ...finalyOrder })
+
+    await logOrderCreated(order);
 
     if (promoCode) {
 

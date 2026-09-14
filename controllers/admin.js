@@ -30,6 +30,8 @@ const {
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
+const { addActivity, logAuto, АВТО } = require('../helpers/activities');
+const { Activity } = require('../models/activity');
 const {
   FUNNEL_STAGES,
   FUNNEL_CANDIDATES,
@@ -1451,6 +1453,13 @@ const getContactById = async (req, res) => {
       })),
       ordersCount: orders.length,
       ordersTotal: orders.reduce((sum, order) => sum + (Number(order.together) || 0), 0),
+      // ⚠️ Рахує БЕК, а не адмінка. Участь у воронці залежить від дат замовлень
+      // (сплячий оптовик), і другий розрахунок у браузері розійшовся б із
+      // дошкою: клієнт був би на ній, а картка не показувала б стадію.
+      inFunnel: isInFunnel(contact, {
+        ordersCount: orders.length,
+        lastOrderAt: orders.length > 0 ? orders[0].createdAt : null,
+      }),
     },
   });
 };
@@ -1592,7 +1601,7 @@ const початокДня = () => {
 // колонки (та рахується на льоту). Без нього кожне відкриття дошки
 // перезаписувало б `nextContactDate` на сьогодні й затирало дату, яку менеджер
 // виставив руками.
-async function позначитиРеанімацію(contact) {
+async function позначитиРеанімацію(contact, днів) {
   if (contact.reactivationSince) {
     return;
   }
@@ -1606,6 +1615,7 @@ async function позначитиРеанімацію(contact) {
   }
 
   await contact.save();
+  await logAuto(contact._id, АВТО.reactivation(днів));
 }
 
 // Вихід із Реанімації: клієнт або знову замовив, або мовчить понад 60 днів.
@@ -1673,7 +1683,7 @@ const getFunnel = async (req, res) => {
       : FUNNEL_STAGES[0];
 
     if (спить) {
-      await позначитиРеанімацію(contact);
+      await позначитиРеанімацію(contact, днівВід(totals.lastOrderAt));
     }
 
     board[stage].push({
@@ -1728,6 +1738,8 @@ const setContactStage = async (req, res) => {
     );
   }
 
+  const попередня = contact.funnelStage;
+
   contact.funnelStage = funnelStage;
 
   // ⚠️ Причина відмови й дата повернення живуть РІВНО поки клієнт у «Відмові».
@@ -1758,7 +1770,93 @@ const setContactStage = async (req, res) => {
 
   await contact.save();
 
+  if (попередня !== funnelStage) {
+    await logAuto(contact._id, АВТО.stage(попередня, funnelStage));
+  }
+
   res.status(200).json({ result: contact });
+};
+
+// Хронологія клієнта — від найсвіжішого.
+const getContactActivities = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const activities = await Activity.find({ contactId: req.params.id })
+    .sort({ date: -1, createdAt: -1 })
+    .limit(200);
+
+  res.status(200).json({ result: activities });
+};
+
+const ТИПИ_АКТИВНОСТІ = ['call', 'meeting', 'message', 'note'];
+
+// Ручний запис у хронологію.
+//
+// ⚠️ 'system' через цю ручку не приймаємо: позначка «записала система» має
+// щось означати, а якщо її може поставити будь-хто, вона не означає нічого.
+const createContactActivity = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const { type, text, date, nextContactDate } = req.body;
+
+  if (!ТИПИ_АКТИВНОСТІ.includes(type)) {
+    throw HttpError(400, 'Невідомий тип активності');
+  }
+
+  const contact = await Contact.findById(req.params.id);
+
+  if (!contact) {
+    throw HttpError(404, 'Клієнта не знайдено');
+  }
+
+  const колиСталось = date ? new Date(date) : new Date();
+
+  if (Number.isNaN(колиСталось.getTime())) {
+    throw HttpError(400, 'Некоректна дата активності');
+  }
+
+  // ⚠️ Нагадування має ТРИ стани, і розрізняти їх обов'язково:
+  //   поля немає  — не чіпати (звичайна нотатка не повинна зносити домовленість);
+  //   null        — зняти (кнопка «звʼязався» в блоці нагадувань);
+  //   дата        — виставити.
+  let дата = null;
+
+  if (nextContactDate !== undefined) {
+    if (nextContactDate === null) {
+      contact.nextContactDate = null;
+    } else {
+      дата = new Date(nextContactDate);
+
+      if (Number.isNaN(дата.getTime())) {
+        throw HttpError(400, 'Некоректна дата наступного контакту');
+      }
+
+      contact.nextContactDate = дата;
+    }
+
+    await contact.save();
+  }
+
+  const activity = await addActivity({
+    contactId: contact._id,
+    type,
+    text: typeof text === 'string' ? text.trim() : '',
+    date: колиСталось,
+    createdBy: admin.login,
+    nextContactDate: дата,
+  });
+
+  res.status(201).json({ result: activity });
 };
 
 // Ручна прив'язка замовлення до клієнта — коли авто за телефоном не спрацювала
@@ -2222,6 +2320,8 @@ module.exports = {
   deleteContact: ctrlWrapper(deleteContact),
   setOrderContact: ctrlWrapper(setOrderContact),
   getFunnel: ctrlWrapper(getFunnel),
+  getContactActivities: ctrlWrapper(getContactActivities),
+  createContactActivity: ctrlWrapper(createContactActivity),
   setContactStage: ctrlWrapper(setContactStage),
   getCounters: ctrlWrapper(getCounters),
   markOrderViewed: ctrlWrapper(markOrderViewed),

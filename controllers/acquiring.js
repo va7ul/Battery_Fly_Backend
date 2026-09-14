@@ -13,6 +13,7 @@ const {
 } = require('../helpers/acquiring');
 const { Order } = require('../models/order');
 const { attachContactToOrder } = require('../helpers/contacts');
+const { logOrderCreated } = require('../helpers/activities');
 const { NumberOfOrders } = require('../models/numberOfOrders');
 const { PromoCode } = require('../models/promoCode');
 const { User } = require('../models/user');
@@ -117,6 +118,8 @@ const createAcquiringOrder = async (req, res) => {
     if (!order) {
         throw HttpError(500, 'Internal server error, write order in DB');
     }
+
+    await logOrderCreated(order);
 
     const payload = buildInvoicePayload({
         numberOfOrder,

@@ -64,6 +64,11 @@ router.patch('/orders/:numberOfOrder/contact', authAdm, ctrl.setOrderContact);
 router.get('/funnel', authAdm, ctrl.getFunnel);
 router.patch('/contacts/:id/stage', authAdm, ctrl.setContactStage);
 
+// Хронологія клієнта. Окремим ресурсом, а не полем картки: записів десятки, і
+// вантажити їх щоразу разом з іменем і телефоном ні до чого.
+router.get('/contacts/:id/activities', authAdm, ctrl.getContactActivities);
+router.post('/contacts/:id/activities', authAdm, ctrl.createContactActivity);
+
 
 
 
