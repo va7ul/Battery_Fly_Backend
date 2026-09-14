@@ -32,9 +32,10 @@ const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
 const {
   FUNNEL_STAGES,
-  FUNNEL_QUERY,
+  FUNNEL_CANDIDATES,
   isInFunnel,
-  startingStage,
+  isSleeping,
+  днівВід,
 } = require('../helpers/funnel');
 const { Admin } = require('../models/admin');
 const { CodeOfGoods } = require('../models/codeOdGoods');
@@ -1306,7 +1307,7 @@ async function loadOrdersTotals(contacts) {
         ? [{ tel: { $in: варіантиТелефонів } }]
         : []),
     ],
-  }).select('contactId tel together');
+  }).select('contactId tel together createdAt');
 
   const підсумки = new Map();
 
@@ -1324,14 +1325,40 @@ async function loadOrdersTotals(contacts) {
       return;
     }
 
-    const поточне = підсумки.get(id) || { ordersCount: 0, ordersTotal: 0 };
+    const поточне = підсумки.get(id) || {
+      ordersCount: 0,
+      ordersTotal: 0,
+      lastOrderAt: null,
+    };
 
     поточне.ordersCount += 1;
     поточне.ordersTotal += Number(order.together) || 0;
+
+    // Дата найсвіжішого замовлення — за нею рахується «замовк» для Реанімації.
+    if (!поточне.lastOrderAt || order.createdAt > поточне.lastOrderAt) {
+      поточне.lastOrderAt = order.createdAt;
+    }
+
     підсумки.set(id, поточне);
   });
 
   return підсумки;
+}
+
+// Порожні підсумки. Клієнт без жодного замовлення в мапі відсутній, і кожне
+// місце інакше писало б свій власний `|| { ordersCount: 0, ... }`.
+const БЕЗ_ЗАМОВЛЕНЬ = { ordersCount: 0, ordersTotal: 0, lastOrderAt: null };
+
+// Підсумки одного клієнта — там, де дошка не потрібна (картка, зміна стадії).
+async function загальнеПоЗамовленнях(contact) {
+  const orders = await loadContactOrders(contact);
+
+  return {
+    ordersCount: orders.length,
+    ordersTotal: orders.reduce((sum, order) => sum + (Number(order.together) || 0), 0),
+    // loadContactOrders сортує від найновішого.
+    lastOrderAt: orders.length > 0 ? orders[0].createdAt : null,
+  };
 }
 
 const getContacts = async (req, res) => {
@@ -1484,19 +1511,15 @@ const createContact = async (req, res) => {
   // Створений руками — за замовчуванням саме такий тип, якщо не сказано інше.
   const contact = await Contact.create({ type: 'manual', ...fields });
 
-  // ⚠️ Клієнт міг замовляти й ДО того, як його завели в CRM: менеджер вписує
-  // телефон, за яким у базі вже є покупки. Такий одразу в «Співпрацюємо», а не
-  // в «Новий лід» — продавати йому вже нічого не треба.
-  // Тут validate() не потрібен: Contact.create() уже прогнав pre('validate'),
-  // тож `digits` на місці.
-  if (isInFunnel(contact)) {
-    const orders = await loadContactOrders(contact);
+  // ⚠️ Стартову стадію більше не рахуємо. Раніше клієнт із наявними покупками
+  // одразу ставав «Співпрацюємо»; тепер такий у воронку просто НЕ потрапляє —
+  // вона лише для тих, хто ще нічого не купив. Усі, хто на дошку заходить,
+  // заходять у «Новий лід» — це значення поля за замовчуванням.
+  const totals = await загальнеПоЗамовленнях(contact);
 
-    contact.funnelStage = startingStage(orders.length > 0);
-    await contact.save();
-  }
-
-  res.status(201).json({ result: contact });
+  res
+    .status(201)
+    .json({ result: { ...contact.toObject(), inFunnel: isInFunnel(contact, totals) } });
 };
 
 const updateContact = async (req, res) => {
@@ -1513,29 +1536,12 @@ const updateContact = async (req, res) => {
     throw HttpError(404, 'Клієнта не знайдено');
   }
 
-  // Чи був клієнт у воронці ДО правки — щоб побачити сам момент входу.
-  const бувУВоронці = isInFunnel(contact);
-
   Object.assign(contact, pickContactFields(req.body));
 
-  // ⚠️ Стадію чіпаємо РІВНО в момент входу у воронку — коли роздрібного з сайту
-  // позначили оптовиком або перевели в ручні. Робити це на кожне збереження не
-  // можна: менеджер, який виправив друкарську помилку в імені клієнта на
-  // стадії «Перемовини», відкинув би його назад.
-  if (!бувУВоронці && isInFunnel(contact)) {
-    // ⚠️ validate() ПЕРЕД пошуком замовлень, а не просто перед save().
-    // Нормалізовані `digits` проставляє pre('validate') моделі, а до нього в
-    // щойно призначених телефонах їх немає — і loadContactOrders шукав би за
-    // undefined. Менеджер, який одним збереженням робить клієнта оптовиком І
-    // виправляє йому телефон на той, з якого той насправді замовляв, отримував
-    // би «Новий лід» замість «Співпрацюємо».
-    await contact.validate();
-
-    const orders = await loadContactOrders(contact);
-
-    contact.funnelStage = startingStage(orders.length > 0);
-  }
-
+  // ⚠️ Стадію при зміні типу/виду більше не чіпаємо. Раніше клієнт, якого
+  // позначали оптовиком, отримував стартову стадію за наявністю покупок; тепер
+  // покупки просто тримають його поза воронкою, і рахувати нічого.
+  //
   // save(), а не findByIdAndUpdate: нормалізація телефонів живе в pre-validate
   // моделі, і оновлення повз документ її оминуло б.
   await contact.save();
@@ -1565,7 +1571,65 @@ const deleteContact = async (req, res) => {
   res.status(200).json({ result: { _id: contact._id } });
 };
 
-// Дошка воронки: учасники, згруповані за стадією.
+// Початок сьогоднішнього дня. Нагадування порівнюються з «<= зараз», тож час у
+// даті лише заважав би: виставлене о 14:00 «на сьогодні» до обіду не спрацювало б.
+const початокДня = () => {
+  const дата = new Date();
+
+  дата.setHours(0, 0, 0, 0);
+
+  return дата;
+};
+
+// Вхід оптовика в Реанімацію — рівно один раз за епізод мовчання.
+//
+// ⚠️ Це ЗАПИС під час читання дошки, і зроблено так свідомо. «Замовк» — не
+// подія, а її відсутність: жоден виклик у системі не настає в момент, коли
+// клієнт перестав замовляти, тож зафіксувати це можна лише тоді, коли хтось
+// дивиться. Cron у проєкті немає.
+//
+// ⚠️ `reactivationSince` — сторож одноразовості, а не ознака належності до
+// колонки (та рахується на льоту). Без нього кожне відкриття дошки
+// перезаписувало б `nextContactDate` на сьогодні й затирало дату, яку менеджер
+// виставив руками.
+async function позначитиРеанімацію(contact) {
+  if (contact.reactivationSince) {
+    return;
+  }
+
+  contact.reactivationSince = new Date();
+
+  // Дату менеджера не чіпаємо: якщо він уже домовився передзвонити в п'ятницю,
+  // «сьогодні» з автомата зіпсувало б домовленість.
+  if (!contact.nextContactDate) {
+    contact.nextContactDate = початокДня();
+  }
+
+  await contact.save();
+}
+
+// Вихід із Реанімації: клієнт або знову замовив, або мовчить понад 60 днів.
+//
+// ⚠️ Нагадування знімаємо разом із позначкою. Воно належало саме цьому епізоду
+// мовчання: людина купила — дзвонити «ви давно не замовляли» вже безглуздо, а
+// висіти в блоці «сьогодні звʼязатися» воно буде доти, доки хтось не прибере.
+async function зняти3Реанімації(contact) {
+  if (!contact.reactivationSince) {
+    return;
+  }
+
+  contact.reactivationSince = null;
+  contact.nextContactDate = null;
+
+  await contact.save();
+}
+
+// Дошка воронки: потенційні клієнти + сплячі оптовики, згруповані за стадією.
+//
+// ⚠️ Воронка — про шлях ДО першої покупки. Хто купив, з дошки виходить і живе у
+// списку клієнтів; інакше дошка з часом перетворилась би на другий, гірший
+// список усієї бази. Єдиний виняток — оптовик, який замовк: він повертається
+// окремим входом «Реанімація».
 //
 // Повертаємо ВСІ стадії, зокрема порожні: колонка без клієнтів — теж
 // інформація («пропозицій ніхто не чекає»), а дошка, у якої колонки то
@@ -1578,22 +1642,39 @@ const getFunnel = async (req, res) => {
     throw HttpError(404, 'Not Found');
   }
 
-  const contacts = await Contact.find(FUNNEL_QUERY).sort({ updatedAt: -1 });
-  const підсумки = await loadOrdersTotals(contacts);
+  const кандидати = await Contact.find(FUNNEL_CANDIDATES).sort({ updatedAt: -1 });
+  const підсумки = await loadOrdersTotals(кандидати);
 
   const board = Object.fromEntries(FUNNEL_STAGES.map(stage => [stage, []]));
 
-  contacts.forEach(contact => {
-    // Невідома стадія (лишок від ручної правки бази) не має ховати клієнта з
-    // дошки — показуємо його на початку воронки.
-    const stage = FUNNEL_STAGES.includes(contact.funnelStage)
+  for (const contact of кандидати) {
+    const totals = підсумки.get(String(contact._id)) || БЕЗ_ЗАМОВЛЕНЬ;
+    const спить = isSleeping(contact, totals.lastOrderAt);
+
+    // Епізод мовчання скінчився — прибираємо позначку, навіть якщо клієнт
+    // взагалі виходить із воронки: інакше при наступному засинанні він уже
+    // вважався б позначеним і не отримав би нагадування.
+    if (!спить && contact.reactivationSince) {
+      await зняти3Реанімації(contact);
+    }
+
+    if (!isInFunnel(contact, totals)) {
+      continue;
+    }
+
+    // ⚠️ Сплячий іде в «Реанімацію» НЕЗАЛЕЖНО від збереженої стадії. Стадія в
+    // нього лишилась із часів, коли він був лідом, і показувати оптовика з
+    // трьома покупками в «Новий лід» означало б брехати про те, де він у
+    // стосунках із магазином.
+    const stage = спить
+      ? 'reactivation'
+      : FUNNEL_STAGES.includes(contact.funnelStage)
       ? contact.funnelStage
       : FUNNEL_STAGES[0];
 
-    const totals = підсумки.get(String(contact._id)) || {
-      ordersCount: 0,
-      ordersTotal: 0,
-    };
+    if (спить) {
+      await позначитиРеанімацію(contact);
+    }
 
     board[stage].push({
       _id: contact._id,
@@ -1605,9 +1686,11 @@ const getFunnel = async (req, res) => {
       primaryPhone: contact.primaryPhone(),
       nextContactDate: contact.nextContactDate,
       lostReason: contact.lostReason,
+      // Скільки днів мовчить — головне число картки в «Реанімації».
+      silentDays: спить ? днівВід(totals.lastOrderAt) : null,
       ...totals,
     });
-  });
+  }
 
   res.status(200).json({ result: board });
 };
@@ -1633,13 +1716,15 @@ const setContactStage = async (req, res) => {
     throw HttpError(404, 'Клієнта не знайдено');
   }
 
-  // ⚠️ Стадію отримують лише учасники воронки. Інакше роздрібний з сайту тихо
-  // отримав би стадію, якої ніде не видно, — і ніхто б не зрозумів, звідки
-  // вона взялась, коли його згодом зроблять оптовиком.
-  if (!isInFunnel(contact)) {
+  // ⚠️ Стадію отримують лише учасники воронки. Інакше клієнт, який давно купує,
+  // тихо отримав би стадію, якої ніде не видно, — і ніхто б не зрозумів,
+  // звідки вона взялась, якби він колись повернувся на дошку.
+  const totals = await загальнеПоЗамовленнях(contact);
+
+  if (!isInFunnel(contact, totals)) {
     throw HttpError(
       400,
-      'Воронка лише для оптових клієнтів і заведених вручну'
+      'У воронці лише потенційні клієнти (ще без замовлень) і сплячі оптовики'
     );
   }
 
