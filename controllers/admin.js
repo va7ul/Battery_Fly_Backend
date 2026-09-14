@@ -1464,6 +1464,8 @@ const createContact = async (req, res) => {
   // ⚠️ Клієнт міг замовляти й ДО того, як його завели в CRM: менеджер вписує
   // телефон, за яким у базі вже є покупки. Такий одразу в «Співпрацюємо», а не
   // в «Новий лід» — продавати йому вже нічого не треба.
+  // Тут validate() не потрібен: Contact.create() уже прогнав pre('validate'),
+  // тож `digits` на місці.
   if (isInFunnel(contact)) {
     const orders = await loadContactOrders(contact);
 
@@ -1498,6 +1500,14 @@ const updateContact = async (req, res) => {
   // можна: менеджер, який виправив друкарську помилку в імені клієнта на
   // стадії «Перемовини», відкинув би його назад.
   if (!бувУВоронці && isInFunnel(contact)) {
+    // ⚠️ validate() ПЕРЕД пошуком замовлень, а не просто перед save().
+    // Нормалізовані `digits` проставляє pre('validate') моделі, а до нього в
+    // щойно призначених телефонах їх немає — і loadContactOrders шукав би за
+    // undefined. Менеджер, який одним збереженням робить клієнта оптовиком І
+    // виправляє йому телефон на той, з якого той насправді замовляв, отримував
+    // би «Новий лід» замість «Співпрацюємо».
+    await contact.validate();
+
     const orders = await loadContactOrders(contact);
 
     contact.funnelStage = startingStage(orders.length > 0);
