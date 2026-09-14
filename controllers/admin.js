@@ -873,7 +873,30 @@ const updateOrderById = async (req, res) => {
     current.status === ORDER_STATUS.NEW ||
     current.status === ORDER_STATUS.AWAITING_PAYMENT;
 
-  if (togetherChanged && stillEditable) {
+  // Фактично внесена сума — ЄДИНИЙ випадок, коли передоплату диктує тіло
+  // запиту.
+  //
+  // До цього моменту prepaymentAmount був прогнозом: відсоток від суми. У
+  // момент підтвердження оплати він перестає бути прогнозом — клієнт міг
+  // внести не ту суму, яку йому виставили (переказав рівну тисячу замість
+  // 2 529 ₴), і далі все рахується від ФАКТУ: і решта накладеним у картці, і
+  // {codAmount} у тексті для клієнта, і сума накладеного платежу в ТТН.
+  //
+  // ⚠️ Двері вузькі навмисно: лише накладений платіж, лише перехід в
+  // «Оплачено» і лише з іншого статусу. Приймати це поле будь-коли не можна —
+  // адмінка шле назад увесь об'єкт замовлення, і кожне збереження переписувало б
+  // передоплату тим, що випадково лежало в сторі.
+  const paidAmount = Number(updateFields.prepaymentAmount);
+  const acceptsPaidAmount =
+    current.payment === CASH_ON_DELIVERY &&
+    status === ORDER_STATUS.PAID &&
+    current.status !== ORDER_STATUS.PAID &&
+    Number.isFinite(paidAmount) &&
+    paidAmount >= 0;
+
+  if (acceptsPaidAmount) {
+    updateFields.prepaymentAmount = Math.round(paidAmount);
+  } else if (togetherChanged && stillEditable) {
     const shopSettings = await loadSettings();
 
     updateFields.prepaymentAmount = calculatePrepayment(
@@ -882,9 +905,9 @@ const updateOrderById = async (req, res) => {
       shopSettings.prepaymentPercent
     );
   } else {
-    // Значення з тіла запиту не приймаємо взагалі: адмінка шле назад увесь
-    // об'єкт замовлення, і зайвий шлях, яким клієнт міг би переписати суму
-    // передоплати, тут не потрібен.
+    // Поза цими двома випадками значення з тіла запиту не приймаємо взагалі:
+    // зайвий шлях, яким клієнт міг би переписати суму передоплати, тут не
+    // потрібен.
     delete updateFields.prepaymentAmount;
   }
 
