@@ -868,6 +868,11 @@ const updateOrderById = async (req, res) => {
   const updateFields = { ...req.body };
   delete updateFields.deliveredAt;
   delete updateFields.stockDeducted;
+  // ⚠️ Внутрішню примітку міняє ТІЛЬКИ окрема ручка (setOrderNote). Адмінка шле
+  // сюди весь об'єкт замовлення, тож без цього рядка кожна зміна статусу
+  // переписувала б примітку тим, що лежало в сторі, — зокрема стирала б щойно
+  // збережену.
+  delete updateFields.internalNote;
 
   // Передоплата перераховується, коли змінилась САМА СУМА замовлення.
   //
@@ -1915,6 +1920,47 @@ const createOrderJournalNote = async (req, res) => {
   res.status(201).json({ result: entry });
 };
 
+// Внутрішня примітка замовлення: зберегти або стерти.
+//
+// ⚠️ Окрема ручка, а не поле в put-order. Адмінка шле в put-order увесь об'єкт
+// замовлення, і примітка переписувалась би тим, що випадково лежало в сторі, на
+// кожну зміну статусу. Той самий клас помилки, що вже був із передоплатою.
+//
+// ⚠️ Збереження непорожньої примітки ДОДАЄ запис у журнал — так історія
+// приміток лишається навіть після того, як поточну стерли. Очищення в журнал
+// не пише: менеджер прибрав нагадування собі ж, події тут немає.
+const setOrderNote = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  const попередня = order.internalNote || '';
+
+  order.internalNote = text;
+  await order.save();
+
+  if (text && text !== попередня) {
+    await addJournalEntry({
+      orderId: order._id,
+      type: 'note',
+      text,
+      createdBy: admin.login,
+    });
+  }
+
+  res.status(200).json({ result: { numberOfOrder: order.numberOfOrder, internalNote: order.internalNote } });
+};
+
 // Хронологія клієнта — від найсвіжішого.
 const getContactActivities = async (req, res) => {
   const { token } = req.user;
@@ -2468,6 +2514,7 @@ module.exports = {
   getFunnel: ctrlWrapper(getFunnel),
   getContactActivities: ctrlWrapper(getContactActivities),
   getOrderJournal: ctrlWrapper(getOrderJournal),
+  setOrderNote: ctrlWrapper(setOrderNote),
   createOrderJournalNote: ctrlWrapper(createOrderJournalNote),
   createContactActivity: ctrlWrapper(createContactActivity),
   setContactStage: ctrlWrapper(setContactStage),

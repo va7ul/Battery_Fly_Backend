@@ -72,6 +72,8 @@ router.get('/contacts/:id/activities', authAdm, ctrl.getContactActivities);
 // ⚠️ Не плутати з order.comment — то коментар клієнта з оформлення.
 router.get('/orders/:numberOfOrder/journal', authAdm, ctrl.getOrderJournal);
 router.post('/orders/:numberOfOrder/journal', authAdm, ctrl.createOrderJournalNote);
+// Внутрішня примітка — одне поточне значення замовлення (історія — у журналі).
+router.patch('/orders/:numberOfOrder/note', authAdm, ctrl.setOrderNote);
 router.post('/contacts/:id/activities', authAdm, ctrl.createContactActivity);
 
 
