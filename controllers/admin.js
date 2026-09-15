@@ -30,8 +30,15 @@ const {
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
-const { addActivity, logAuto, АВТО } = require('../helpers/activities');
+const {
+  addActivity,
+  addJournalEntry,
+  logAuto,
+  logJournal,
+  АВТО,
+} = require('../helpers/activities');
 const { Activity } = require('../models/activity');
+const { OrderJournal } = require('../models/orderJournal');
 const {
   FUNNEL_STAGES,
   FUNNEL_CANDIDATES,
@@ -1823,6 +1830,68 @@ const setContactStage = async (req, res) => {
   res.status(200).json({ result: contact });
 };
 
+// Журнал замовлення — від найсвіжішого.
+//
+// ⚠️ Шукається за НОМЕРОМ замовлення (100504), як усі інші ручки замовлень в
+// адмінці, а зберігається за _id. Номер — те, чим замовлення називають люди;
+// _id — те, чим його називає база, і плутати їх у роутах уже одного разу
+// коштувало помилок (див. коментар до put-order).
+const getOrderJournal = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  const entries = await OrderJournal.find({ orderId: order._id })
+    .sort({ date: -1, createdAt: -1 })
+    .limit(200);
+
+  res.status(200).json({ result: entries });
+};
+
+// Ручна нотатка менеджера.
+//
+// ⚠️ Тип фіксований — 'note'. Приймати його з тіла не можна: 'status' і 'ttn'
+// означають «це записала система», і позначка варта чогось лише доти, доки її
+// не може поставити будь-хто.
+const createOrderJournalNote = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+
+  if (!text) {
+    throw HttpError(400, 'Порожню нотатку не зберігаємо');
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  const entry = await addJournalEntry({
+    orderId: order._id,
+    type: 'note',
+    text,
+    createdBy: admin.login,
+  });
+
+  res.status(201).json({ result: entry });
+};
+
 // Хронологія клієнта — від найсвіжішого.
 const getContactActivities = async (req, res) => {
   const { token } = req.user;
@@ -2373,6 +2442,8 @@ module.exports = {
   setOrderContact: ctrlWrapper(setOrderContact),
   getFunnel: ctrlWrapper(getFunnel),
   getContactActivities: ctrlWrapper(getContactActivities),
+  getOrderJournal: ctrlWrapper(getOrderJournal),
+  createOrderJournalNote: ctrlWrapper(createOrderJournalNote),
   createContactActivity: ctrlWrapper(createContactActivity),
   setContactStage: ctrlWrapper(setContactStage),
   getCounters: ctrlWrapper(getCounters),
