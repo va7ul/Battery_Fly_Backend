@@ -67,6 +67,11 @@ router.patch('/contacts/:id/stage', authAdm, ctrl.setContactStage);
 // Хронологія клієнта. Окремим ресурсом, а не полем картки: записів десятки, і
 // вантажити їх щоразу разом з іменем і телефоном ні до чого.
 router.get('/contacts/:id/activities', authAdm, ctrl.getContactActivities);
+
+// Журнал замовлення: автоподії (статус, ТТН) + внутрішні нотатки менеджера.
+// ⚠️ Не плутати з order.comment — то коментар клієнта з оформлення.
+router.get('/orders/:numberOfOrder/journal', authAdm, ctrl.getOrderJournal);
+router.post('/orders/:numberOfOrder/journal', authAdm, ctrl.createOrderJournalNote);
 router.post('/contacts/:id/activities', authAdm, ctrl.createContactActivity);
 
 

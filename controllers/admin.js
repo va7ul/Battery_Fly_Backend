@@ -30,8 +30,15 @@ const {
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
-const { addActivity, logAuto, АВТО } = require('../helpers/activities');
+const {
+  addActivity,
+  addJournalEntry,
+  logAuto,
+  logJournal,
+  АВТО,
+} = require('../helpers/activities');
 const { Activity } = require('../models/activity');
+const { OrderJournal } = require('../models/orderJournal');
 const {
   FUNNEL_STAGES,
   FUNNEL_CANDIDATES,
@@ -954,6 +961,29 @@ const updateOrderById = async (req, res) => {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
 
+  // Журнал замовлення. Тільки ЗАПИС — нічого вище не чіпаємо.
+  //
+  // ⚠️ Місце обране навмисно: після того, як збереження вдалося, і ДО відповіді.
+  // Раніше — писали б про зміну, якої могло не статись; пізніше, після
+  // res.json, — робота після відповіді, а саме такі «хвости» в цьому контролері
+  // вже коштували помилок. Обидва виклики ковтають збій (див. helpers/activities),
+  // тож рядок у журналі не здатен зірвати збереження замовлення.
+  //
+  // ⚠️ Порівнюємо зі станом ДО оновлення (`current`), а не з тілом запиту:
+  // адмінка шле назад увесь об'єкт замовлення, і `status` у ньому приходить
+  // навіть тоді, коли менеджер правив зовсім інше поле.
+  if (current.status !== order.status) {
+    await logJournal(order._id, 'status', АВТО.status(current.status, order.status));
+  }
+
+  // ⚠️ Ловимо ПОЯВУ номера, а не його наявність. Автоформування зберігає ТТН
+  // раніше, окремим запитом (див. createOrderTtn), і там же пише свій рядок —
+  // тут у `current.ttn` номер уже є, тож другого запису не буде. Спрацьовує це
+  // лише на ручному вводі, де іншого місця немає.
+  if (!current.ttn && order.ttn) {
+    await logJournal(order._id, 'ttn', АВТО.ttn(order.ttn));
+  }
+
   res.status(200).json({
     result: order
   });
@@ -1823,6 +1853,68 @@ const setContactStage = async (req, res) => {
   res.status(200).json({ result: contact });
 };
 
+// Журнал замовлення — від найсвіжішого.
+//
+// ⚠️ Шукається за НОМЕРОМ замовлення (100504), як усі інші ручки замовлень в
+// адмінці, а зберігається за _id. Номер — те, чим замовлення називають люди;
+// _id — те, чим його називає база, і плутати їх у роутах уже одного разу
+// коштувало помилок (див. коментар до put-order).
+const getOrderJournal = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  const entries = await OrderJournal.find({ orderId: order._id })
+    .sort({ date: -1, createdAt: -1 })
+    .limit(200);
+
+  res.status(200).json({ result: entries });
+};
+
+// Ручна нотатка менеджера.
+//
+// ⚠️ Тип фіксований — 'note'. Приймати його з тіла не можна: 'status' і 'ttn'
+// означають «це записала система», і позначка варта чогось лише доти, доки її
+// не може поставити будь-хто.
+const createOrderJournalNote = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const text = typeof req.body.text === 'string' ? req.body.text.trim() : '';
+
+  if (!text) {
+    throw HttpError(400, 'Порожню нотатку не зберігаємо');
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  const entry = await addJournalEntry({
+    orderId: order._id,
+    type: 'note',
+    text,
+    createdBy: admin.login,
+  });
+
+  res.status(201).json({ result: entry });
+};
+
 // Хронологія клієнта — від найсвіжішого.
 const getContactActivities = async (req, res) => {
   const { token } = req.user;
@@ -2078,6 +2170,8 @@ const createOrderTtn = async (req, res) => {
 
     order.ttn = document.IntDocNumber;
     await order.save();
+
+    await logJournal(order._id, 'ttn', АВТО.ttn(document.IntDocNumber));
 
     res.status(200).json({
       result: {
@@ -2373,6 +2467,8 @@ module.exports = {
   setOrderContact: ctrlWrapper(setOrderContact),
   getFunnel: ctrlWrapper(getFunnel),
   getContactActivities: ctrlWrapper(getContactActivities),
+  getOrderJournal: ctrlWrapper(getOrderJournal),
+  createOrderJournalNote: ctrlWrapper(createOrderJournalNote),
   createContactActivity: ctrlWrapper(createContactActivity),
   setContactStage: ctrlWrapper(setContactStage),
   getCounters: ctrlWrapper(getCounters),
