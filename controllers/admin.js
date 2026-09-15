@@ -438,6 +438,12 @@ const getOrders = async (req, res) => {
           // Заразом ТТН видно прямо в переліку, без заходу в картку.
           ttn: order.ttn,
           prepaymentAmount: order.prepaymentAmount,
+          // Статус посилки від Пошти — щоб відмову було видно прямо в переліку,
+          // без заходу в кожну картку. Саме заради цього трекінг і працює:
+          // менеджер гортає сотню замовлень і має вихопити оком проблемні.
+          npStatusCode: order.npStatusCode,
+          npStatusText: order.npStatusText,
+          npStatusUpdatedAt: order.npStatusUpdatedAt,
           payment: order.payment,
           payParts: order.payParts,
           monopayState: order.monopayState,
@@ -873,6 +879,14 @@ const updateOrderById = async (req, res) => {
   // переписувала б примітку тим, що лежало в сторі, — зокрема стирала б щойно
   // збережену.
   delete updateFields.internalNote;
+  // ⚠️ Те саме і для статусу посилки: його пише ВИКЛЮЧНО фоновий трекінг
+  // (jobs/npTrackingJob.js). Відколи ці поля з'явились у списку замовлень,
+  // адмінка шле їх назад при кожній зміні статусу — і без цих рядків крок
+  // «Відправлено → Доставлено» зі списку затирав би те, що Пошта прислала
+  // хвилину тому.
+  delete updateFields.npStatusCode;
+  delete updateFields.npStatusText;
+  delete updateFields.npStatusUpdatedAt;
 
   // Передоплата перераховується, коли змінилась САМА СУМА замовлення.
   //
