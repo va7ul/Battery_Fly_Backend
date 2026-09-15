@@ -227,6 +227,49 @@ async function notifyNewOrder(order) {
   }
 }
 
+// Проблема з доставкою: відмова, повернення, припинене зберігання.
+//
+// ⚠️ Єдиний вихід трекінгу «назовні». Решта того, що знаходить крон, лягає в
+// журнал замовлення й чекає, поки менеджер відкриє картку; повернення ж коштує
+// грошей і часу, і дізнатись про нього треба зараз, а не коли хтось гляне.
+//
+// ⚠️ Статус замовлення при цьому НЕ міняється: що робити з поверненням —
+// рішення менеджера, а не автомата.
+function buildDeliveryProblemMessage(order, statusText) {
+  const lines = [
+    `🔴 <b>Проблема доставки №${escapeHtml(order.numberOfOrder)}</b>`,
+    `📦 ${escapeHtml(statusText)}`,
+  ];
+
+  if (order.ttn) {
+    lines.push(`🚚 ТТН ${escapeHtml(order.ttn)}`);
+  }
+
+  const customer = [order.lastName, order.firstName].filter(Boolean).join(' ');
+
+  if (customer) {
+    lines.push(`👤 ${escapeHtml(customer)}${order.tel ? `, ${escapeHtml(order.tel)}` : ''}`);
+  }
+
+  const link = buildAdminLink(order.numberOfOrder);
+
+  if (link) {
+    lines.push(link);
+  }
+
+  return lines.join('\n');
+}
+
+async function notifyDeliveryProblem(order, statusText) {
+  try {
+    return await sendTelegramMessage(buildDeliveryProblemMessage(order, statusText));
+  } catch (error) {
+    console.error('[telegram] delivery problem notification failed:', error.message);
+
+    return false;
+  }
+}
+
 async function notifyNewFeedback(feedback) {
   try {
     return await sendTelegramMessage(buildFeedbackMessage(feedback));
@@ -241,6 +284,8 @@ module.exports = {
   sendTelegramMessage,
   buildOrderMessage,
   buildFeedbackMessage,
+  buildDeliveryProblemMessage,
   notifyNewOrder,
   notifyNewFeedback,
+  notifyDeliveryProblem,
 };
