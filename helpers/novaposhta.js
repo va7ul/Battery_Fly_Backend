@@ -41,9 +41,15 @@ class NovaPoshtaError extends Error {
 // calledMethod у тілі. Старий код постив на `/searchSettlements`, маючи в тілі
 // getCities, тож насправді роками працював getCities. Тут шлях порожній, щоб
 // назва методу була видна в одному місці.
-async function npPost(modelName, calledMethod, methodProperties = {}) {
+//
+// ⚠️ Ключ можна перевизначити останнім аргументом, і трекінг цим користується,
+// передаючи порожній рядок. TrackingDocument.getStatusDocuments працює без
+// ключа (перевірено живим запитом: apiKey:'' → HTTP 200, success:true), а
+// щогодинне опитування статусів не має витрачати ліміти бойового ключа, яким
+// створюються накладні. За замовчуванням — той самий ключ, що й був.
+async function npPost(modelName, calledMethod, methodProperties = {}, apiKey = NOVA_POST) {
   const { data } = await npClient.post('', {
-    apiKey: NOVA_POST,
+    apiKey,
     modelName,
     calledMethod,
     methodProperties,
