@@ -1372,9 +1372,12 @@ const getContacts = async (req, res) => {
   }
 
   const { search = '', type, kind, page = 1, limit = 50 } = req.query;
+
+  // ⚠️ Фільтр БЕЗ типу. Саме з нього рахуються лічильники вкладок: питання на
+  // них — «скільки з САЙТУ серед того, що я зараз шукаю», і домішувати туди
+  // вибрану вкладку не можна. Тип додається лише до вибірки списку нижче.
   const filter = {};
 
-  if (type) filter.type = type;
   if (kind) filter.kind = kind;
 
   const query = String(search).trim();
@@ -1396,9 +1399,19 @@ const getContacts = async (req, res) => {
   const перPage = Math.min(Number(limit) || 50, 200);
   const пропустити = (Math.max(Number(page) || 1, 1) - 1) * перPage;
 
-  const [contacts, total] = await Promise.all([
-    Contact.find(filter).sort({ updatedAt: -1 }).skip(пропустити).limit(перPage),
+  const списковий = type ? { ...filter, type } : filter;
+
+  // ⚠️ Лічильники рахує БАЗА, а не адмінка по отриманій сторінці. Рахунок по
+  // сторінці був подвійно неправдивий: по-перше, він мінявся від вибраної
+  // вкладки (на «Із сайту» вкладка «Додані вручну» показувала 0, бо в вибірці
+  // ручних не було); по-друге, сторінка — це щонайбільше 50 записів, тож на
+  // більшій базі цифри були б стелею, а не кількістю.
+  const [contacts, total, all, site, manual] = await Promise.all([
+    Contact.find(списковий).sort({ updatedAt: -1 }).skip(пропустити).limit(перPage),
+    Contact.countDocuments(списковий),
     Contact.countDocuments(filter),
+    Contact.countDocuments({ ...filter, type: 'site' }),
+    Contact.countDocuments({ ...filter, type: 'manual' }),
   ]);
 
   // Підсумки по замовленнях — по одному запиту на клієнта сторінки. Сторінка
@@ -1417,7 +1430,7 @@ const getContacts = async (req, res) => {
     })
   );
 
-  res.status(200).json({ result, total });
+  res.status(200).json({ result, total, counts: { all, site, manual } });
 };
 
 const getContactById = async (req, res) => {
