@@ -961,6 +961,29 @@ const updateOrderById = async (req, res) => {
     throw HttpError(500, 'Internal server eror, write code in DB');
   }
 
+  // Журнал замовлення. Тільки ЗАПИС — нічого вище не чіпаємо.
+  //
+  // ⚠️ Місце обране навмисно: після того, як збереження вдалося, і ДО відповіді.
+  // Раніше — писали б про зміну, якої могло не статись; пізніше, після
+  // res.json, — робота після відповіді, а саме такі «хвости» в цьому контролері
+  // вже коштували помилок. Обидва виклики ковтають збій (див. helpers/activities),
+  // тож рядок у журналі не здатен зірвати збереження замовлення.
+  //
+  // ⚠️ Порівнюємо зі станом ДО оновлення (`current`), а не з тілом запиту:
+  // адмінка шле назад увесь об'єкт замовлення, і `status` у ньому приходить
+  // навіть тоді, коли менеджер правив зовсім інше поле.
+  if (current.status !== order.status) {
+    await logJournal(order._id, 'status', АВТО.status(current.status, order.status));
+  }
+
+  // ⚠️ Ловимо ПОЯВУ номера, а не його наявність. Автоформування зберігає ТТН
+  // раніше, окремим запитом (див. createOrderTtn), і там же пише свій рядок —
+  // тут у `current.ttn` номер уже є, тож другого запису не буде. Спрацьовує це
+  // лише на ручному вводі, де іншого місця немає.
+  if (!current.ttn && order.ttn) {
+    await logJournal(order._id, 'ttn', АВТО.ttn(order.ttn));
+  }
+
   res.status(200).json({
     result: order
   });
@@ -2147,6 +2170,8 @@ const createOrderTtn = async (req, res) => {
 
     order.ttn = document.IntDocNumber;
     await order.save();
+
+    await logJournal(order._id, 'ttn', АВТО.ttn(document.IntDocNumber));
 
     res.status(200).json({
       result: {
