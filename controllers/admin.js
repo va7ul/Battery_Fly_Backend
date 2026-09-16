@@ -1017,6 +1017,30 @@ const updateOrderById = async (req, res) => {
   // тут у `current.ttn` номер уже є, тож другого запису не буде. Спрацьовує це
   // лише на ручному вводі, де іншого місця немає.
   if (!current.ttn && order.ttn) {
+    // ⚠️ Ручний ввід номера мусить створити ПОСИЛКУ, а не лише поле. Інакше
+    // замовлення отримувало б ТТН повз облік: секція посилок показувала б
+    // «посилок немає» при живому номері, а скидання не мало б чого скидати.
+    // Цим шляхом ходить і стара адмінка, яку ще не оновили.
+    if (!order.parcels || order.parcels.length === 0) {
+      order.parcels.push({
+        ttn: order.ttn,
+        ttnRef: null,
+        method: 'manual',
+        items: getFulfillment(order).lines
+          .filter(line => line.remaining > 0)
+          .map(line => ({
+            lineIndex: line.lineIndex,
+            codeOfGood: line.codeOfGood,
+            name: line.name,
+            quantity: line.remaining,
+          })),
+        recipient: { useClientAddress: true },
+        codAmount: null,
+      });
+
+      await order.save();
+    }
+
     await logJournal(order._id, 'ttn', АВТО.ttn(order.ttn));
   }
 
@@ -2322,6 +2346,31 @@ const resetOrderTtn = async (req, res) => {
 
   if (!order) {
     throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  // ⚠️ Замовлення ДО міграції має номер, але не має посилок. Скидання для нього
+  // мусить працювати, інакше кнопка мовчки нічого б не робила рівно на тих
+  // замовленнях, заради яких її й натискають. Заводимо посилку на льоту — те
+  // саме, що зробив би скрипт міграції.
+  if ((!order.parcels || order.parcels.length === 0) && order.ttn) {
+    order.parcels.push({
+      ttn: order.ttn,
+      ttnRef: order.ttnRef || null,
+      method: 'manual',
+      items: (order.cartItems || []).map((item, lineIndex) => ({
+        lineIndex,
+        codeOfGood: item.codeOfGood || '',
+        name: item.name || '',
+        quantity: Math.max(1, Math.trunc(Number(item.quantityOrdered) || 1)),
+      })),
+      recipient: { useClientAddress: true },
+      codAmount: null,
+      npStatusCode: order.npStatusCode || null,
+      npStatusText: order.npStatusText || null,
+      npStatusUpdatedAt: order.npStatusUpdatedAt || null,
+    });
+
+    await order.save();
   }
 
   const parcel = (order.parcels || [])[0] || null;
