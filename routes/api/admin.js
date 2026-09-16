@@ -47,6 +47,8 @@ router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
 // Формування ТТН. Статус замовлення не змінює — це робить окремий виклик
 // оновлення замовлення, тим самим шляхом, що й при ручному вводі номера.
 router.post('/orders/:numberOfOrder/create-ttn', authAdm, ctrl.createOrderTtn);
+// Скидання ТТН: розблокувати створення нової, коли поточна недійсна.
+router.post('/orders/:numberOfOrder/reset-ttn', authAdm, ctrl.resetOrderTtn);
 
 // ─── Клієнти CRM ────────────────────────────────────────────────────────────
 // Не плутати з /users: там акаунти на сайті, тут — усі, хто замовляв.
