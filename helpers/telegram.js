@@ -235,13 +235,39 @@ async function notifyNewOrder(order) {
 //
 // ⚠️ Статус замовлення при цьому НЕ міняється: що робити з поверненням —
 // рішення менеджера, а не автомата.
-function buildDeliveryProblemMessage(order, statusText) {
+// ⚠️ Третій аргумент — КОНКРЕТНА посилка. Замовлення може їхати кількома
+// коробками, і «проблема доставки №100504» без уточнення, якої саме, змушує
+// менеджера відкривати картку й здогадуватись. Без посилки поводиться як
+// раніше — на це спираються замовлення, у яких її ще немає.
+function buildDeliveryProblemMessage(order, statusText, parcel) {
   const lines = [
     `🔴 <b>Проблема доставки №${escapeHtml(order.numberOfOrder)}</b>`,
     `📦 ${escapeHtml(statusText)}`,
   ];
 
-  if (order.ttn) {
+  if (parcel) {
+    if (parcel.ttn) {
+      lines.push(`🚚 ТТН ${escapeHtml(parcel.ttn)}`);
+    }
+
+    const товари = (parcel.items || [])
+      .map(item => `${escapeHtml(item.name)} × ${escapeHtml(item.quantity)}`)
+      .join(', ');
+
+    if (товари) {
+      lines.push(`📋 У посилці: ${товари}`);
+    }
+
+    // Інша адреса — саме та обставина, за якої повернення найчастіше й
+    // трапляється: отримувач не той, кого попереджали.
+    if (parcel.recipient && parcel.recipient.useClientAddress === false) {
+      lines.push(
+        `📍 ${escapeHtml(parcel.recipient.name || '')} · ${escapeHtml(
+          parcel.recipient.cityName || ''
+        )}, ${escapeHtml(parcel.recipient.warehouseName || '')}`
+      );
+    }
+  } else if (order.ttn) {
     lines.push(`🚚 ТТН ${escapeHtml(order.ttn)}`);
   }
 
@@ -260,9 +286,11 @@ function buildDeliveryProblemMessage(order, statusText) {
   return lines.join('\n');
 }
 
-async function notifyDeliveryProblem(order, statusText) {
+async function notifyDeliveryProblem(order, statusText, parcel) {
   try {
-    return await sendTelegramMessage(buildDeliveryProblemMessage(order, statusText));
+    return await sendTelegramMessage(
+      buildDeliveryProblemMessage(order, statusText, parcel)
+    );
   } catch (error) {
     console.error('[telegram] delivery problem notification failed:', error.message);
 

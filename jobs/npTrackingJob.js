@@ -4,6 +4,10 @@ const { getTrackingBatch, mapStatusToAction } = require('../helpers/npTracking')
 const { logJournal, АВТО } = require('../helpers/activities');
 const { notifyDeliveryProblem } = require('../helpers/telegram');
 const { acquireLock, releaseLock } = require('../helpers/cronLock');
+const {
+  allParcelsDelivered,
+  syncLegacyTtn,
+} = require('../helpers/parcels');
 
 const ЗАМОК = 'np-tracking';
 
@@ -14,6 +18,11 @@ const ЗАМОК = 'np-tracking';
 // це стосується ОДНІЄЇ посилки, а не решти трьохсот, і прохід мусить дійти до
 // кінця. Тому try/catch стоїть навколо кожного замовлення окремо, а не навколо
 // циклу.
+//
+// ⚠️ Крон працює з ПОСИЛКАМИ, а не з order.ttn. Замовлення може їхати кількома
+// коробками, у кожної свій шлях: одна вже у відділенні, друга щойно виїхала,
+// третю повернули. Один номер на замовлення цього не описує, і статус, знятий
+// лише з першої, розповідав би про решту вигадку.
 //
 // ⚠️ Статус міняємо тут, а не через updateOrderById. Той — express-контролер, і
 // підробляти йому req/res із крона означало б залежати від того, що він колись
@@ -54,7 +63,7 @@ async function позначитиДоставленим(order) {
   return true;
 }
 
-async function обробитиЗамовлення(order, tracking) {
+async function обробитиПосилку(order, parcel, tracking) {
   const код = String(tracking.StatusCode || '');
   const текст = String(tracking.Status || '').trim();
 
@@ -62,41 +71,54 @@ async function обробитиЗамовлення(order, tracking) {
   // отримував би той самий рядок «Відправлення у місті Львів», і за добу картка
   // замовлення перетворилась би на стрічку з двадцяти однакових записів, у якій
   // справжню подію вже не знайти.
-  if (код && код === String(order.npStatusCode || '')) {
+  if (код && код === String(parcel.npStatusCode || '')) {
     return { змінено: false };
   }
 
-  order.npStatusCode = код;
-  order.npStatusText = текст;
-  order.npStatusUpdatedAt = new Date();
+  // ⚠️ Пишемо В ПОСИЛКУ. Статус на рівні замовлення при кількох коробках
+  // означав би «статус котроїсь із них» — тобто нічого.
+  parcel.npStatusCode = код;
+  parcel.npStatusText = текст;
+  parcel.npStatusUpdatedAt = new Date();
+
+  // Дзеркало для списку замовлень — там один рядок і одна пігулка (див.
+  // helpers/parcels.js).
+  syncLegacyTtn(order);
   await order.save();
 
   const { action, hint } = mapStatusToAction(код);
 
+  // ⚠️ У записі видно, ЯКА посилка зрушила. «Нова Пошта: прибув у відділення»
+  // біля замовлення з трьох коробок не каже нічого корисного.
   await logJournal(
     order._id,
     'np_status',
-    `Нова Пошта: ${текст || 'без опису'}${hint ? ` (${hint})` : ''}`
+    `Посилка ${parcel.ttn}: ${текст || 'без опису'}${hint ? ` (${hint})` : ''}`
   );
 
   const наслідки = { змінено: true, доставлено: false, повернення: false };
 
   if (action === 'delivered') {
-    наслідки.доставлено = await позначитиДоставленим(order);
+    // ⚠️ Замовлення закривається, лише коли отримані ВСІ посилки. Клієнт, у
+    // якого приїхала одна коробка з двох, ще чекає — і замовлення «Доставлено»
+    // збрехало б і йому, і середньому часу обробки на дашборді.
+    if (allParcelsDelivered(order)) {
+      наслідки.доставлено = await позначитиДоставленим(order);
+    }
   }
 
   // ⚠️ Статус замовлення при поверненні НЕ чіпаємо. Що робити з відмовою —
   // рішення менеджера: одне повернення оформлюють, інше передомовляють. Автомат
-  // лише голосно про це каже.
+  // лише голосно про це каже — і саме про ту коробку, яка не доїхала.
   if (action === 'return') {
     наслідки.повернення = true;
-    await notifyDeliveryProblem(order, hint ? `${текст} — ${hint}` : текст);
+    await notifyDeliveryProblem(order, hint ? `${текст} — ${hint}` : текст, parcel);
   }
 
   // Видалена чи неіснуюча накладна — теж сигнал: далі трекінг по ній не дасть
   // нічого, і менеджеру треба глянути на номер.
   if (action === 'error') {
-    await notifyDeliveryProblem(order, hint ? `${текст} — ${hint}` : текст);
+    await notifyDeliveryProblem(order, hint ? `${текст} — ${hint}` : текст, parcel);
   }
 
   return наслідки;
@@ -114,6 +136,7 @@ async function runNpTracking() {
 
   const підсумок = {
     перевірено: 0,
+    посилок: 0,
     змінено: 0,
     доставлено: 0,
     повернень: 0,
@@ -124,9 +147,17 @@ async function runNpTracking() {
   try {
     // ⚠️ Тільки активні відправлення. Доставлені й скасовані питати немає сенсу:
     // їхній шлях закінчився, а кожна зайва сотня ТТН — це зайва пачка щогодини.
+    // ⚠️ Тільки активні відправлення, і тільки ті, у яких є посилки з номером.
+    // Доставлені й скасовані питати немає сенсу: їхній шлях закінчився, а кожна
+    // зайва сотня ТТН — це зайва пачка щогодини.
+    // ⚠️ $elemMatch, а не 'parcels.ttn': { $nin: [...] }. Перевірено запитом:
+    // друга форма затягує ще й замовлення з ПОРОЖНІМ масивом посилок — шлях
+    // до неіснуючого поля під $nin вважається збігом. Шкоди від них немає
+    // (активних посилок нуль, прохід одразу виходить), але вибирати з бази
+    // те, що напевно не знадобиться, — марна робота на кожному проході.
     const orders = await Order.find({
       status: ORDER_STATUS.SHIPPED,
-      ttn: { $nin: [null, ''] },
+      parcels: { $elemMatch: { ttn: { $nin: [null, ''] } } },
     });
 
     підсумок.перевірено = orders.length;
@@ -135,21 +166,44 @@ async function runNpTracking() {
       return підсумок;
     }
 
-    const { statuses, failedBatches } = await getTrackingBatch(orders.map(o => o.ttn));
+    // ⚠️ Мертві посилки (видалена / номер не знайдено) з запиту виключаємо.
+    // Їхній статус уже не зміниться ніколи, а щогодинне питання про них — це
+    // місця в пачці, відібрані в коробок, які справді їдуть.
+    const активні = [];
+
+    orders.forEach(order => {
+      (order.parcels || []).forEach(parcel => {
+        const мертва = ['2', '3'].includes(String(parcel.npStatusCode || ''));
+
+        if (parcel.ttn && !мертва) {
+          активні.push({ order, parcel });
+        }
+      });
+    });
+
+    підсумок.посилок = активні.length;
+
+    if (активні.length === 0) {
+      return підсумок;
+    }
+
+    const { statuses, failedBatches } = await getTrackingBatch(
+      активні.map(({ parcel }) => parcel.ttn)
+    );
 
     підсумок.невдалихПачок = failedBatches;
 
     const заНомером = new Map(statuses.map(s => [String(s.Number), s]));
 
-    for (const order of orders) {
-      const tracking = заНомером.get(String(order.ttn));
+    for (const { order, parcel } of активні) {
+      const tracking = заНомером.get(String(parcel.ttn));
 
       if (!tracking) {
         continue;
       }
 
       try {
-        const наслідки = await обробитиЗамовлення(order, tracking);
+        const наслідки = await обробитиПосилку(order, parcel, tracking);
 
         if (наслідки.змінено) підсумок.змінено += 1;
         if (наслідки.доставлено) підсумок.доставлено += 1;
@@ -157,7 +211,7 @@ async function runNpTracking() {
       } catch (error) {
         підсумок.помилок += 1;
         console.error(
-          `[np-tracking] замовлення №${order.numberOfOrder} не оброблено:`,
+          `[np-tracking] посилка ${parcel.ttn} (замовлення №${order.numberOfOrder}) не оброблена:`,
           error.message
         );
       }
@@ -172,11 +226,11 @@ async function runNpTracking() {
   } finally {
     // ⚠️ finally, а не після return: замок мусить зніматись і тоді, коли прохід
     // упав. Інакше задача мовчала б до закінчення строку давності замка.
-    const рядок = `перевірено ${підсумок.перевірено}, змінено ${підсумок.змінено}, доставлено ${підсумок.доставлено}, повернень ${підсумок.повернень}, помилок ${підсумок.помилок}`;
+    const рядок = `замовлень ${підсумок.перевірено}, посилок ${підсумок.посилок}, змінено ${підсумок.змінено}, доставлено ${підсумок.доставлено}, повернень ${підсумок.повернень}, помилок ${підсумок.помилок}`;
 
     console.info(`[np-tracking] ${рядок}`);
     await releaseLock(ЗАМОК, рядок);
   }
 }
 
-module.exports = { runNpTracking, позначитиДоставленим, обробитиЗамовлення, ЗАМОК };
+module.exports = { runNpTracking, позначитиДоставленим, обробитиПосилку, ЗАМОК };
