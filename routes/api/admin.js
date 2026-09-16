@@ -50,6 +50,13 @@ router.post('/orders/:numberOfOrder/create-ttn', authAdm, ctrl.createOrderTtn);
 // Скидання ТТН: розблокувати створення нової, коли поточна недійсна.
 router.post('/orders/:numberOfOrder/reset-ttn', authAdm, ctrl.resetOrderTtn);
 
+// Посилки замовлення. ⚠️ create-ttn і reset-ttn вище лишаються робочими: між
+// викладкою бека й адмінки стара версія має продовжувати працювати, і там вони
+// керують першою посилкою.
+router.get('/orders/:numberOfOrder/fulfillment', authAdm, ctrl.getOrderFulfillment);
+router.post('/orders/:numberOfOrder/parcels', authAdm, ctrl.createOrderParcel);
+router.post('/orders/:numberOfOrder/parcels/:parcelId/reset', authAdm, ctrl.resetOrderParcel);
+
 // ─── Клієнти CRM ────────────────────────────────────────────────────────────
 // Не плутати з /users: там акаунти на сайті, тут — усі, хто замовляв.
 router.get('/contacts', authAdm, ctrl.getContacts);
