@@ -19,7 +19,8 @@ const {
   getMissingSenderFields,
   CASH_ON_DELIVERY,
 } = require('../helpers');
-const { npPost, NovaPoshtaError } = require('../helpers/novaposhta');
+const { npPost, deleteInternetDocument,
+  NovaPoshtaError } = require('../helpers/novaposhta');
 const {
   resolveCityRef,
   resolveWarehouse,
@@ -30,6 +31,9 @@ const {
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
+// Статус накладної потрібен перед скиданням ТТН: тихо скидаємо лише те, що
+// напевно мертве (див. resetOrderTtn).
+const { getTrackingBatch } = require('../helpers/npTracking');
 const {
   addActivity,
   addJournalEntry,
@@ -1872,6 +1876,135 @@ const setContactStage = async (req, res) => {
   res.status(200).json({ result: contact });
 };
 
+// Скидання ТТН — розблокувати створення нової, коли поточна недійсна.
+//
+// ⚠️ ГОЛОВНЕ: будь-яка невизначеність веде до ПИТАННЯ менеджеру, а не до тихого
+// скидання. Накладна може бути живою й оплаченою; стерти номер у себе — не те
+// саме, що скасувати її в Пошті, і різницю між цими двома діями магазин
+// відчуває грошима. Тому тихо скидаємо лише те, що напевно мертве.
+//
+// Порядок:
+//   1. Номера немає — нічого робити (ідемпотентність).
+//   2. Менеджер уже підтвердив — скидаємо локально, як він і просив.
+//   3. Питаємо Пошту про статус:
+//      • код 2 або 3 (видалено / не знайдено) — накладна мертва, скидаємо тихо;
+//      • жива — пробуємо видалити в Пошті:
+//          – вийшло: скидаємо;
+//          – відмова: НЕ скидаємо, повертаємо текст Пошти й чекаємо
+//            підтвердження;
+//      • Пошта не відповіла — теж не скидаємо, питаємо.
+const МЕРТВІ_КОДИ = ['2', '3'];
+
+async function скинутиНомер(order, reason, текстПричини) {
+  const попередній = order.ttn;
+
+  order.ttn = null;
+  order.ttnRef = null;
+  // ⚠️ Три поля статусу теж, інакше крон порівняє статус НОВОЇ накладної зі
+  // збереженим кодом СТАРОЇ, вирішить «не змінилось» і промовчить назавжди.
+  order.npStatusCode = null;
+  order.npStatusText = null;
+  order.npStatusUpdatedAt = null;
+
+  // ⚠️ Статус замовлення, stockDeducted і deliveredAt НЕ чіпаємо. Скидання
+  // номера — не скасування відправлення: чи повертати замовлення назад,
+  // вирішує менеджер окремою дією.
+  await order.save();
+
+  await logJournal(order._id, 'ttn', `ТТН ${попередній} скинута (${текстПричини})`);
+
+  return { reset: true, reason, previousTtn: попередній };
+}
+
+const resetOrderTtn = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
+
+  if (!order) {
+    throw HttpError(404, 'Замовлення не знайдено');
+  }
+
+  // Повторний виклик на порожньому номері — не помилка.
+  if (!order.ttn) {
+    return res.status(200).json({ result: { reset: true, reason: 'already-empty' } });
+  }
+
+  if (req.body && req.body.confirmLocalOnly === true) {
+    return res.status(200).json({
+      result: await скинутиНомер(order, 'local-only', 'лише в базі, за рішенням менеджера'),
+    });
+  }
+
+  const { statuses, failedBatches } = await getTrackingBatch([order.ttn]);
+  const tracking = statuses.find(s => String(s.Number) === String(order.ttn));
+
+  // Пошта не відповіла — мовчки скидати не можна: накладна може бути жива.
+  if (!tracking || failedBatches > 0) {
+    return res.status(200).json({
+      result: {
+        needsConfirm: true,
+        npStatus: null,
+        message:
+          'Нова Пошта не відповіла на запит про статус накладної. Скинути номер лише в нашій базі? Якщо накладна жива й оплачена, гроші за неї не повернуться.',
+      },
+    });
+  }
+
+  const код = String(tracking.StatusCode || '');
+
+  if (МЕРТВІ_КОДИ.includes(код)) {
+    return res.status(200).json({
+      result: await скинутиНомер(
+        order,
+        'dead',
+        код === '2' ? 'видалена в Новій Пошті' : 'номер не знайдено в Новій Пошті'
+      ),
+    });
+  }
+
+  // ⚠️ Ref із замовлення, а якщо його немає (накладна створена до появи поля) —
+  // із самої відповіді трекінгу.
+  const ref = order.ttnRef || tracking.RefEW || null;
+
+  if (!ref) {
+    return res.status(200).json({
+      result: {
+        needsConfirm: true,
+        npStatus: tracking.Status || '',
+        message: `Накладна активна (${tracking.Status || 'статус невідомий'}), а її ідентифікатора для видалення немає. Скинути номер лише в нашій базі?`,
+      },
+    });
+  }
+
+  try {
+    await deleteInternetDocument(ref);
+  } catch (error) {
+    // ⚠️ Будь-яка відмова — і «вже в дорозі», і невгаданий параметр, і збій
+    // мережі — трактується однаково: НЕ видалено, питаємо людину.
+    const причина = error instanceof NovaPoshtaError && error.errors.length > 0
+      ? error.errors.join('; ')
+      : error.message;
+
+    return res.status(200).json({
+      result: {
+        needsConfirm: true,
+        npStatus: tracking.Status || '',
+        message: `Нова Пошта не видалила накладну: ${причина}. Статус зараз — «${tracking.Status || 'невідомий'}». Скинути номер лише в нашій базі? Якщо ви за неї платите, гроші не повернуться.`,
+      },
+    });
+  }
+
+  return res.status(200).json({
+    result: await скинутиНомер(order, 'deleted', 'видалена запитом до Нової Пошти'),
+  });
+};
+
 // Журнал замовлення — від найсвіжішого.
 //
 // ⚠️ Шукається за НОМЕРОМ замовлення (100504), як усі інші ручки замовлень в
@@ -2229,6 +2362,9 @@ const createOrderTtn = async (req, res) => {
     }
 
     order.ttn = document.IntDocNumber;
+    // Ref зберігаємо ЗАРАЗ, поки Пошта його щойно віддала. Дістати його потім
+    // можна лише окремим запитом, і саме він потрібен, щоб накладну видалити.
+    order.ttnRef = document.Ref || null;
     await order.save();
 
     await logJournal(order._id, 'ttn', АВТО.ttn(document.IntDocNumber));
@@ -2519,6 +2655,7 @@ module.exports = {
   updateShopSettings: ctrlWrapper(updateShopSettings),
   getNovaPoshtaSenders: ctrlWrapper(getNovaPoshtaSenders),
   createOrderTtn: ctrlWrapper(createOrderTtn),
+  resetOrderTtn: ctrlWrapper(resetOrderTtn),
   getContacts: ctrlWrapper(getContacts),
   getContactById: ctrlWrapper(getContactById),
   createContact: ctrlWrapper(createContact),
