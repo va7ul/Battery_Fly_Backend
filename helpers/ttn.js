@@ -153,6 +153,7 @@ function buildTtnPayload({
   city,
   warehouse,
   manual,
+  recipientPhone,
 }) {
   const { optionsSeat, volumeGeneral } = buildOptionsSeat({
     seatsAmount: manual.seatsAmount,
@@ -187,7 +188,11 @@ function buildTtnPayload({
     Recipient: recipient.ref,
     RecipientAddress: warehouse.ref,
     ContactRecipient: recipient.contactRef,
-    RecipientsPhone: normalizePhone(order.tel),
+    // ⚠️ Телефон приходить аргументом, бо посилка може їхати НЕ клієнтові:
+    // «батарею мені, зарядку — на роботу». Без нього Пошта дзвонила б
+    // замовникові про коробку, яку той не чекає. Замовчування — телефон
+    // замовлення, як було до появи посилок.
+    RecipientsPhone: normalizePhone(recipientPhone || order.tel),
   };
 
   if (manual.codAmount) {
