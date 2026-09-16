@@ -2229,6 +2229,9 @@ const createOrderTtn = async (req, res) => {
     }
 
     order.ttn = document.IntDocNumber;
+    // Ref зберігаємо ЗАРАЗ, поки Пошта його щойно віддала. Дістати його потім
+    // можна лише окремим запитом, і саме він потрібен, щоб накладну видалити.
+    order.ttnRef = document.Ref || null;
     await order.save();
 
     await logJournal(order._id, 'ttn', АВТО.ttn(document.IntDocNumber));
