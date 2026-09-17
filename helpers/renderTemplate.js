@@ -49,7 +49,17 @@ function buildValues(order = {}, settings = {}) {
         ? ''
         : String(settings.prepaymentPercent),
     requisites: settings.requisites || '',
-    ttn: order.ttn || '',
+    // ⚠️ {ttn} — це СПИСОК номерів, а не один. Замовлення може їхати кількома
+    // коробками, і клієнт, якому назвали лише перший номер, знайде за ним
+    // третину свого замовлення й вирішить, що решту загубили.
+    //
+    // ⚠️ Плейсхолдер лишився тим самим навмисно: власник уже написав під нього
+    // свої шаблони, і новий {ttnList} означав би, що всі вони мовчки
+    // перестануть показувати номер.
+    ttn: (order.parcels || [])
+      .map(parcel => parcel.ttn)
+      .filter(Boolean)
+      .join(', '),
     paymentPurpose: orderNumber ? `Оплата за замовлення №${orderNumber}` : '',
   };
 }
