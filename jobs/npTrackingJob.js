@@ -6,7 +6,6 @@ const { notifyDeliveryProblem } = require('../helpers/telegram');
 const { acquireLock, releaseLock } = require('../helpers/cronLock');
 const {
   allParcelsDelivered,
-  syncLegacyTtn,
 } = require('../helpers/parcels');
 
 const ЗАМОК = 'np-tracking';
@@ -81,9 +80,6 @@ async function обробитиПосилку(order, parcel, tracking) {
   parcel.npStatusText = текст;
   parcel.npStatusUpdatedAt = new Date();
 
-  // Дзеркало для списку замовлень — там один рядок і одна пігулка (див.
-  // helpers/parcels.js).
-  syncLegacyTtn(order);
   await order.save();
 
   const { action, hint } = mapStatusToAction(код);

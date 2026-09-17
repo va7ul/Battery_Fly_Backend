@@ -209,17 +209,54 @@ const getOrders = async (req, res) => {
       });
 }
 
+// Замовлення в кабінеті клієнта.
+//
+// ⚠️ Віддаємо ПРОЄКЦІЮ, а не документ цілком. Раніше сюди їхало все, що є в
+// замовленні: внутрішня примітка менеджера, поля трекінгу, посилки — зокрема
+// їхні адреси й отримувачі, які могли бути ЧУЖИМИ («надішліть зарядку на
+// роботу колезі»). Клієнт нічого з цього не бачив на екрані лише тому, що фронт
+// їх не малює, — але в мережевій відповіді вони лежали відкрито.
+//
+// ⚠️ Список полів явний, а не «прибрати зайве». Чорний список мовчки пропустив
+// би кожне нове поле замовлення: варто комусь додати внутрішню позначку — і
+// вона поїде клієнту, і ніхто цього не помітить.
 const getOrderById = async (req, res) => {
-    console.log(req.user.email)
-    console.log(req.params.id)
     const order = await Order.findOne({numberOfOrder: req.params.id});
+
+    if (!order) {
+        throw HttpError(404, 'Order not found');
+    }
 
     if(req.user.email !== order.email){
         throw HttpError(400, 'Bad request');
     }
 
     res.status(200).json({
-        result: order
+        result: {
+            numberOfOrder: order.numberOfOrder,
+            createdAt: order.createdAt,
+            status: order.status,
+            // Дані, які клієнт сам і ввів при оформленні.
+            firstName: order.firstName,
+            lastName: order.lastName,
+            email: order.email,
+            tel: order.tel,
+            comment: order.comment,
+            // Склад і гроші його замовлення.
+            cartItems: order.cartItems,
+            total: order.total,
+            promoCode: order.promoCode,
+            promoCodeDiscount: order.promoCodeDiscount,
+            discountValue: order.discountValue,
+            together: order.together,
+            // Доставка, про яку він домовлявся.
+            deliveryType: order.deliveryType,
+            city: order.city,
+            warehouse: order.warehouse,
+            payment: order.payment,
+            payParts: order.payParts,
+            prepaymentAmount: order.prepaymentAmount,
+        }
       });
 }
 

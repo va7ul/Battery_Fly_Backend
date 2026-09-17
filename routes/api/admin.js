@@ -44,15 +44,11 @@ router.put('/settings', authAdm, ctrl.updateShopSettings);
 // Довідник відправників Нової Пошти для налаштувань (контрагенти + контакти).
 router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
 
-// Формування ТТН. Статус замовлення не змінює — це робить окремий виклик
-// оновлення замовлення, тим самим шляхом, що й при ручному вводі номера.
-router.post('/orders/:numberOfOrder/create-ttn', authAdm, ctrl.createOrderTtn);
-// Скидання ТТН: розблокувати створення нової, коли поточна недійсна.
-router.post('/orders/:numberOfOrder/reset-ttn', authAdm, ctrl.resetOrderTtn);
-
-// Посилки замовлення. ⚠️ create-ttn і reset-ttn вище лишаються робочими: між
-// викладкою бека й адмінки стара версія має продовжувати працювати, і там вони
-// керують першою посилкою.
+// Посилки замовлення: формування накладних, скидання, контроль повноти.
+//
+// ⚠️ Ручок create-ttn і reset-ttn рівня ЗАМОВЛЕННЯ більше немає. Вони вміли
+// працювати рівно з одним номером, а номери тепер живуть у посилках: /parcels
+// і згенерує накладну, і прийме введену руками, і скине окрему коробку.
 router.get('/orders/:numberOfOrder/fulfillment', authAdm, ctrl.getOrderFulfillment);
 router.post('/orders/:numberOfOrder/parcels', authAdm, ctrl.createOrderParcel);
 router.post('/orders/:numberOfOrder/parcels/:parcelId/reset', authAdm, ctrl.resetOrderParcel);

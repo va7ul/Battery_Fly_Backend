@@ -32,12 +32,11 @@ const {
 const { Contact } = require('../models/contact');
 const { normalizePhone } = require('../helpers/phone');
 // Статус накладної потрібен перед скиданням ТТН: тихо скидаємо лише те, що
-// напевно мертве (див. resetOrderTtn).
+// напевно мертве (див. resetOrderParcel).
 const { getTrackingBatch } = require('../helpers/npTracking');
 const {
   getFulfillment,
   перевіритиПозиції,
-  syncLegacyTtn,
 } = require('../helpers/parcels');
 const {
   addActivity,
@@ -441,20 +440,13 @@ const getOrders = async (req, res) => {
           deliveryType: order.deliveryType,
           city: order.city,
           warehouse: order.warehouse,
-          // ttn і prepaymentAmount свідомо в списку, а не лише в get-order:
-          // адмінка шле весь об'єкт замовлення назад в update, і поля, яких у
-          // списку немає, доводиться доклеювати руками в кожному обробнику.
-          // Заразом ТТН видно прямо в переліку, без заходу в картку.
-          ttn: order.ttn,
+          // prepaymentAmount свідомо в списку, а не лише в get-order: адмінка
+          // шле весь об'єкт замовлення назад в update, і поля, яких у списку
+          // немає, доводиться доклеювати руками в кожному обробнику.
           prepaymentAmount: order.prepaymentAmount,
-          // Статус посилки від Пошти — щоб відмову було видно прямо в переліку,
-          // без заходу в кожну картку. Саме заради цього трекінг і працює:
-          // менеджер гортає сотню замовлень і має вихопити оком проблемні.
-          npStatusCode: order.npStatusCode,
-          npStatusText: order.npStatusText,
-          npStatusUpdatedAt: order.npStatusUpdatedAt,
-          // Посилки — щоб у переліку було видно попередження «не всі товари
-          // відправлені», не заходячи в кожну картку.
+          // ⚠️ Посилки цілком. З них адмінка сама рахує і номери, і
+          // узагальнений статус замовлення, і «не всі товари відправлені» — усе
+          // те, заради чого тут раніше лежали окремі поля ttn/npStatus*.
           parcels: order.parcels,
           payment: order.payment,
           payParts: order.payParts,
@@ -872,7 +864,7 @@ const updateOrderById = async (req, res) => {
     throw HttpError(404, 'Order not found');
   }
 
-  const { status, cartItems, ttn } = req.body;
+  const { status, cartItems } = req.body;
 
   if (status && status !== current.status
       && !isTransitionAllowed(current.status, status, current.payment)) {
@@ -896,9 +888,6 @@ const updateOrderById = async (req, res) => {
   // адмінка шле їх назад при кожній зміні статусу — і без цих рядків крок
   // «Відправлено → Доставлено» зі списку затирав би те, що Пошта прислала
   // хвилину тому.
-  delete updateFields.npStatusCode;
-  delete updateFields.npStatusText;
-  delete updateFields.npStatusUpdatedAt;
   // ⚠️ І посилки теж: ними керують власні ручки. Відколи вони з'явились у
   // списку замовлень, адмінка шле їх назад при кожній зміні статусу — без
   // цього рядка крок «Відправлено → Доставлено» зі списку затер би посилку,
@@ -963,10 +952,17 @@ const updateOrderById = async (req, res) => {
     delete updateFields.prepaymentAmount;
   }
 
-  // ТТН обов'язковий саме на відправці: без номера цей статус не несе тієї
-  // інформації, заради якої його вводили.
-  if (status === ORDER_STATUS.SHIPPED && !ttn && !current.ttn) {
-    throw HttpError(400, 'Для статусу «Відправлено» потрібен номер ТТН');
+  // ⚠️ У «Відправлено» пускаємо лише спаковане замовлення. Раніше тут вимагався
+  // номер ТТН; тепер номери живуть у посилках, і питання стало прямішим: чи є
+  // що відправляти. Пакують посилки в картці замовлення — секція доступна вже
+  // з «Оплачено».
+  const єПосилки = (current.parcels || []).some(parcel => parcel.ttn);
+
+  if (status === ORDER_STATUS.SHIPPED && !єПосилки) {
+    throw HttpError(
+      400,
+      'Для статусу «Відправлено» потрібна хоча б одна посилка з номером ТТН'
+    );
   }
 
   // Списання складу перенесене з «В роботі» на «Оплачено»: гроші отримані —
@@ -1012,37 +1008,6 @@ const updateOrderById = async (req, res) => {
     await logJournal(order._id, 'status', АВТО.status(current.status, order.status));
   }
 
-  // ⚠️ Ловимо ПОЯВУ номера, а не його наявність. Автоформування зберігає ТТН
-  // раніше, окремим запитом (див. createOrderTtn), і там же пише свій рядок —
-  // тут у `current.ttn` номер уже є, тож другого запису не буде. Спрацьовує це
-  // лише на ручному вводі, де іншого місця немає.
-  if (!current.ttn && order.ttn) {
-    // ⚠️ Ручний ввід номера мусить створити ПОСИЛКУ, а не лише поле. Інакше
-    // замовлення отримувало б ТТН повз облік: секція посилок показувала б
-    // «посилок немає» при живому номері, а скидання не мало б чого скидати.
-    // Цим шляхом ходить і стара адмінка, яку ще не оновили.
-    if (!order.parcels || order.parcels.length === 0) {
-      order.parcels.push({
-        ttn: order.ttn,
-        ttnRef: null,
-        method: 'manual',
-        items: getFulfillment(order).lines
-          .filter(line => line.remaining > 0)
-          .map(line => ({
-            lineIndex: line.lineIndex,
-            codeOfGood: line.codeOfGood,
-            name: line.name,
-            quantity: line.remaining,
-          })),
-        recipient: { useClientAddress: true },
-        codAmount: null,
-      });
-
-      await order.save();
-    }
-
-    await logJournal(order._id, 'ttn', АВТО.ttn(order.ttn));
-  }
 
   res.status(200).json({
     result: order
@@ -2148,7 +2113,6 @@ const createOrderParcel = async (req, res) => {
   }
 
   order.parcels.push(посилка);
-  syncLegacyTtn(order);
   await order.save();
 
   const створена = order.parcels[order.parcels.length - 1];
@@ -2215,11 +2179,10 @@ async function скинутиПосилку(order, parcel, reason, текстП�
   const попередній = parcel.ttn;
   const номерУСписку = order.parcels.findIndex(p => String(p._id) === String(parcel._id)) + 1;
 
+  // ⚠️ Посилка зникає разом зі своїм статусом — інакше крон порівняв би статус
+  // НОВОЇ накладної зі збереженим кодом СТАРОЇ, вирішив «не змінилось» і
+  // промовчав назавжди.
   order.parcels.pull({ _id: parcel._id });
-  // ⚠️ Три поля статусу зникають разом із посилкою. Лишившись на рівні
-  // замовлення, вони змусили б крон порівняти статус НОВОЇ накладної зі
-  // збереженим кодом СТАРОЇ, вирішити «не змінилось» і промовчати назавжди.
-  syncLegacyTtn(order);
   await order.save();
 
   await logJournal(
@@ -2320,64 +2283,6 @@ const resetOrderParcel = async (req, res) => {
     return res.status(200).json({
       result: { reset: true, reason: 'already-empty', fulfillment: getFulfillment(order) },
     });
-  }
-
-  const result = await розумнеСкидання(
-    order,
-    parcel,
-    req.body && req.body.confirmLocalOnly === true
-  );
-
-  res.status(200).json({ result });
-};
-
-// ⚠️ СТАРА ручка. Лишається робочою навмисно: адмінка деплоїться окремо від
-// бека, і між двома викладками стара версія має продовжувати працювати. Тут
-// вона керує ПЕРШОЮ посилкою — рівно тим, чим була order.ttn до переробки.
-const resetOrderTtn = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const order = await Order.findOne({ numberOfOrder: req.params.numberOfOrder });
-
-  if (!order) {
-    throw HttpError(404, 'Замовлення не знайдено');
-  }
-
-  // ⚠️ Замовлення ДО міграції має номер, але не має посилок. Скидання для нього
-  // мусить працювати, інакше кнопка мовчки нічого б не робила рівно на тих
-  // замовленнях, заради яких її й натискають. Заводимо посилку на льоту — те
-  // саме, що зробив би скрипт міграції.
-  if ((!order.parcels || order.parcels.length === 0) && order.ttn) {
-    order.parcels.push({
-      ttn: order.ttn,
-      ttnRef: order.ttnRef || null,
-      method: 'manual',
-      items: (order.cartItems || []).map((item, lineIndex) => ({
-        lineIndex,
-        codeOfGood: item.codeOfGood || '',
-        name: item.name || '',
-        quantity: Math.max(1, Math.trunc(Number(item.quantityOrdered) || 1)),
-      })),
-      recipient: { useClientAddress: true },
-      codAmount: null,
-      npStatusCode: order.npStatusCode || null,
-      npStatusText: order.npStatusText || null,
-      npStatusUpdatedAt: order.npStatusUpdatedAt || null,
-    });
-
-    await order.save();
-  }
-
-  const parcel = (order.parcels || [])[0] || null;
-
-  // Повторний виклик на порожньому номері — не помилка.
-  if (!parcel) {
-    return res.status(200).json({ result: { reset: true, reason: 'already-empty' } });
   }
 
   const result = await розумнеСкидання(
@@ -2607,212 +2512,6 @@ const setOrderContact = async (req, res) => {
   await order.save();
 
   res.status(200).json({ result: { numberOfOrder: order.numberOfOrder, contactId: order.contactId } });
-};
-
-// Формування ТТН Нової Пошти для замовлення.
-//
-// ⚠️ Статус замовлення тут НЕ змінюється — свідомо. Перехід у «Відправлено»
-// має власні правила (дозволені переходи, обов'язковість ТТН, залишки), і вони
-// вже живуть в updateOrderById. Дублювати їх тут означало б завести другий,
-// нікому не відомий шлях зміни статусу, який розійдеться з першим при першій
-// же правці. Адмінка після успіху викликає той самий updateOrderById, що й при
-// ручному вводі номера.
-//
-// ⚠️ Номер зберігається ОДРАЗУ після відповіді Пошти, окремим записом. Якщо
-// впасти між створенням ТТН і збереженням, у Пошті лишиться оплачена накладна,
-// про яку магазин нічого не знає, — а другу для того самого замовлення вже не
-// створити (див. перевірку нижче).
-const createOrderTtn = async (req, res) => {
-  const { token } = req.user;
-  const admin = await Admin.findOne({ token });
-
-  if (!admin) {
-    throw HttpError(404, 'Not Found');
-  }
-
-  const { numberOfOrder } = req.params;
-  const order = await Order.findOne({ numberOfOrder });
-
-  if (!order) {
-    throw HttpError(404, `Замовлення ${numberOfOrder} не знайдено`);
-  }
-
-  // ⚠️ Раніше тут стояло «якщо ttn є — 409». Тепер кілька посилок на замовлення
-  // — нормальний випадок, і блокує не наявність номера, а відсутність того, що
-  // ще можна відправити. Друга коробка з рештою товару має створюватись вільно.
-  const { allItemsShipped } = getFulfillment(order);
-
-  if (allItemsShipped) {
-    throw HttpError(409, 'Усі товари замовлення вже розподілені по посилках');
-  }
-
-  const settings = await loadSettings();
-  const missing = getMissingSenderFields(settings);
-
-  if (missing.length > 0) {
-    throw HttpError(
-      400,
-      `Не заповнено дані відправника в Налаштуваннях: ${missing.join(', ')}`
-    );
-  }
-
-  const { weight, width, length, height, seatsAmount, cost, description, codAmount } =
-    req.body;
-
-  const positive = (value, label) => {
-    const number = Number(value);
-
-    if (!Number.isFinite(number) || number <= 0) {
-      throw HttpError(400, `${label} має бути додатним числом`);
-    }
-
-    return number;
-  };
-
-  // Габарити в сантиметрах — з них рахується OptionsSeat, без якого Пошта
-  // накладну не приймає.
-  const manual = {
-    weight: positive(weight, 'Вага'),
-    width: positive(width, 'Ширина'),
-    length: positive(length, 'Довжина'),
-    height: positive(height, 'Висота'),
-    seatsAmount: Math.max(1, Math.trunc(Number(seatsAmount) || 1)),
-    cost: Math.max(0, Math.round(Number(cost) || 0)),
-    description: String(description || '').trim(),
-    codAmount: 0,
-  };
-
-  if (!manual.description) {
-    throw HttpError(400, 'Опис відправлення обовʼязковий');
-  }
-
-  // Наложка тільки для накладеного платежу. Сума з модалки має пріоритет —
-  // менеджер міг домовитись інакше, — але для решти способів оплати вона
-  // ігнорується: там гроші вже отримані.
-  if (order.payment === CASH_ON_DELIVERY) {
-    const запропоновано = redeliverySum(order);
-    const обрано = codAmount === undefined || codAmount === null ? запропоновано : Number(codAmount);
-
-    if (обрано !== null && Number.isFinite(обрано) && обрано > 0) {
-      manual.codAmount = Math.round(обрано);
-    }
-  }
-
-  try {
-    // Адреса отримувача відновлюється з тексту замовлення: Ref у ньому ніколи
-    // не зберігався, а назви Пошти однозначні.
-    const city = await resolveCityRef(order.city);
-    const warehouse = await resolveWarehouse(order.city, order.warehouse);
-
-    // Адреса ВІДПРАВНИКА — тим самим механізмом. У налаштуваннях лежать лише
-    // назви, обрані з довідника Пошти, тож Ref беремо тут, а не зберігаємо.
-    const senderCity = await resolveCityRef(settings.npSender.cityName);
-    const senderWarehouse = await resolveWarehouse(
-      settings.npSender.cityName,
-      settings.npSender.warehouseName
-    );
-
-    if (warehouse.maxWeight && manual.weight > warehouse.maxWeight) {
-      throw HttpError(
-        400,
-        `Вага ${manual.weight} кг перевищує ліміт цього відділення (${warehouse.maxWeight} кг). ` +
-          `Це ${warehouse.category === 'Postomat' ? 'поштомат' : 'відділення'}, ` +
-          'оберіть меншу вагу або домовтесь із клієнтом про іншу адресу.'
-      );
-    }
-
-    // ⚠️ Дані клієнта в замовленні ПЛАСКІ. Форма шле їх у userData, але
-    // контролер створення розкладає їх на верхній рівень (див. схему
-    // models/order.js) — і order.userData в збереженому документі не існує.
-    const recipient = await ensureRecipient({
-      firstName: order.firstName,
-      lastName: order.lastName,
-      phone: order.tel,
-    });
-
-    const payload = buildTtnPayload({
-      order,
-      sender: settings.npSender,
-      senderCity,
-      senderWarehouse,
-      recipient,
-      city,
-      warehouse,
-      manual,
-    });
-
-    const created = await npPost('InternetDocument', 'save', payload);
-    const document = created[0];
-
-    if (!document || !document.IntDocNumber) {
-      throw new NovaPoshtaError(['Нова Пошта не повернула номер ТТН']);
-    }
-
-    // ⚠️ Стара ручка теж створює ПОСИЛКУ, а не пише в order.ttn. Інакше
-    // адмінка, яку ще не оновили, робила б накладні повз новий облік, і
-    // «розподілено X з Y» показувало б нуль при живій коробці в дорозі.
-    // Товари — всі нерозподілені: ця ручка не вміє вибирати, і саме так вона
-    // поводилась завжди.
-    order.parcels.push({
-      ttn: document.IntDocNumber,
-      // Ref зберігаємо ЗАРАЗ, поки Пошта його щойно віддала. Дістати його
-      // потім можна лише окремим запитом, і саме він потрібен для видалення.
-      ttnRef: document.Ref || null,
-      method: 'auto',
-      items: getFulfillment(order).lines
-        .filter(line => line.remaining > 0)
-        .map(line => ({
-          lineIndex: line.lineIndex,
-          codeOfGood: line.codeOfGood,
-          name: line.name,
-          quantity: line.remaining,
-        })),
-      recipient: { useClientAddress: true },
-      codAmount: manual.codAmount || null,
-    });
-
-    syncLegacyTtn(order);
-    await order.save();
-
-    await logJournal(order._id, 'ttn', АВТО.ttn(document.IntDocNumber));
-
-    res.status(200).json({
-      result: {
-        ttn: document.IntDocNumber,
-        ref: document.Ref,
-        cost: document.CostOnSite,
-        estimatedDeliveryDate: document.EstimatedDeliveryDate,
-        serviceType: payload.ServiceType,
-        warehouseCategory: warehouse.category,
-        codAmount: manual.codAmount,
-      },
-    });
-  } catch (error) {
-    if (error instanceof NovaPoshtaError) {
-      // Єдиний випадок, коли текст Пошти замінюємо своїм: «Передана послуга
-      // Післяплата недоступна» нічого не каже про те, ЩО робити, і виглядає
-      // як помилка в даних — хоча це питання договору з Поштою.
-      const проПісляплату =
-        error.errorCodes.includes('20000204637') || /Післяплат/i.test(error.message);
-
-      if (проПісляплату && manual.codAmount) {
-        throw HttpError(
-          502,
-          await explainRedeliveryRefusal(settings.npSender.counterpartyRef)
-        );
-      }
-
-      // Решта — текстом Пошти як є: саме він каже, що виправити.
-      throw HttpError(502, `Нова Пошта: ${error.message}`);
-    }
-
-    if (error.status) {
-      throw error;
-    }
-
-    console.error('[createOrderTtn] несподівана помилка:', error.message);
-    throw HttpError(502, 'Не вдалося створити ТТН');
-  }
 };
 
 // Довідник відправників для налаштувань адмінки.
@@ -3061,8 +2760,6 @@ module.exports = {
   getShopSettings: ctrlWrapper(getShopSettings),
   updateShopSettings: ctrlWrapper(updateShopSettings),
   getNovaPoshtaSenders: ctrlWrapper(getNovaPoshtaSenders),
-  createOrderTtn: ctrlWrapper(createOrderTtn),
-  resetOrderTtn: ctrlWrapper(resetOrderTtn),
   createOrderParcel: ctrlWrapper(createOrderParcel),
   getOrderFulfillment: ctrlWrapper(getOrderFulfillment),
   resetOrderParcel: ctrlWrapper(resetOrderParcel),

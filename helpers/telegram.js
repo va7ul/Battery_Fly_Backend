@@ -237,8 +237,7 @@ async function notifyNewOrder(order) {
 // рішення менеджера, а не автомата.
 // ⚠️ Третій аргумент — КОНКРЕТНА посилка. Замовлення може їхати кількома
 // коробками, і «проблема доставки №100504» без уточнення, якої саме, змушує
-// менеджера відкривати картку й здогадуватись. Без посилки поводиться як
-// раніше — на це спираються замовлення, у яких її ще немає.
+// менеджера відкривати картку й здогадуватись.
 function buildDeliveryProblemMessage(order, statusText, parcel) {
   const lines = [
     `🔴 <b>Проблема доставки №${escapeHtml(order.numberOfOrder)}</b>`,
@@ -267,8 +266,6 @@ function buildDeliveryProblemMessage(order, statusText, parcel) {
         )}, ${escapeHtml(parcel.recipient.warehouseName || '')}`
       );
     }
-  } else if (order.ttn) {
-    lines.push(`🚚 ТТН ${escapeHtml(order.ttn)}`);
   }
 
   const customer = [order.lastName, order.firstName].filter(Boolean).join(' ');
