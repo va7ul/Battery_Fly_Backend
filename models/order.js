@@ -310,6 +310,17 @@ const orderSchema = new Schema(
                             // потрібна рідко, але коли потрібна, іншого способу
                             // її вказати немає.
                             useClientAddress: { type: Boolean, default: true },
+                            // ⚠️ ПІБ окремими полями, бо Пошта хоче їх окремо.
+                            // Раніше приходив один рядок, який ділився по
+                            // пробілу «прізвище — решта», і «Іван Петренко»
+                            // ставало прізвищем Іван: накладна виписувалась на
+                            // неіснуючу людину, а помітно це вже у відділенні.
+                            lastName: { type: String, default: '' },
+                            firstName: { type: String, default: '' },
+                            middleName: { type: String, default: '' },
+                            // Зібраний ПІБ — для показу в картці. Пишеться
+                            // беком із трьох полів вище, щоб не було двох
+                            // правд про одне ім'я.
                             name: { type: String, default: '' },
                             phone: { type: String, default: '' },
                             cityName: { type: String, default: '' },
