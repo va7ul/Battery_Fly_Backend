@@ -18,10 +18,12 @@ function todayForNp() {
 // сама створює (або знаходить) приватну особу за іменем і телефоном, і
 // повертає пару Ref — контрагента й контактної особи. Повторний виклик із
 // тими самими даними дублікату не робить.
-async function ensureRecipient({ firstName, lastName, phone }) {
+async function ensureRecipient({ firstName, lastName, middleName, phone }) {
   const created = await npPost('Counterparty', 'save', {
     FirstName: String(firstName || '').trim(),
     LastName: String(lastName || '').trim(),
+    // По батькові Пошта приймає, але не вимагає — у неї воно теж необов'язкове.
+    MiddleName: String(middleName || '').trim(),
     Phone: normalizePhone(phone),
     CounterpartyType: 'PrivatePerson',
     CounterpartyProperty: 'Recipient',

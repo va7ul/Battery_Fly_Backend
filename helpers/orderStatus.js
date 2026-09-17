@@ -19,6 +19,16 @@ const CARD_ONLINE = 'card_online';
 const MONOPAY_PARTS = 'monopay_parts';
 const CASH_ON_DELIVERY = 'Накладений платіж';
 
+// Типи доставки. Значення приходять із checkout клієнта (Delivery.tsx) і
+// зберігаються В ЗАМОВЛЕННІ рядком — саме тому вони тут, а не в enum моделі:
+// у базі вже лежать замовлення з обома, і будь-яке звуження зламало б їх.
+//
+// ⚠️ Накладна існує ЛИШЕ для Нової Пошти. Самовивіз — це коли клієнт приїжджає
+// сам, тож вимагати від такого замовлення посилку означає не випустити його з
+// «Оплачено» ніколи.
+const НОВА_ПОШТА = 'Нова пошта';
+const САМОВИВІЗ = 'Самовивіз';
+
 const ONLINE_FLOW = [
   ORDER_STATUS.NEW,
   ORDER_STATUS.PAID,
@@ -112,6 +122,8 @@ module.exports = {
   CARD_ONLINE,
   MONOPAY_PARTS,
   CASH_ON_DELIVERY,
+  НОВА_ПОШТА,
+  САМОВИВІЗ,
   PREPAYMENT_PERCENT,
   getStatusFlow,
   isTransitionAllowed,
