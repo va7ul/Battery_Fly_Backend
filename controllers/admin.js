@@ -18,6 +18,7 @@ const {
   renderTemplate,
   getMissingSenderFields,
   CASH_ON_DELIVERY,
+  САМОВИВІЗ,
 } = require('../helpers');
 const { npPost, deleteInternetDocument,
   NovaPoshtaError } = require('../helpers/novaposhta');
@@ -30,13 +31,15 @@ const {
   explainRedeliveryRefusal,
 } = require('../helpers/ttn');
 const { Contact } = require('../models/contact');
-const { normalizePhone } = require('../helpers/phone');
+const { normalizePhone, toUaPhone } = require('../helpers/phone');
 // Статус накладної потрібен перед скиданням ТТН: тихо скидаємо лише те, що
 // напевно мертве (див. resetOrderParcel).
 const { getTrackingBatch } = require('../helpers/npTracking');
 const {
   getFulfillment,
   перевіритиПозиції,
+  allParcelsDelivered,
+  deliveredCount,
 } = require('../helpers/parcels');
 const {
   addActivity,
@@ -952,16 +955,62 @@ const updateOrderById = async (req, res) => {
     delete updateFields.prepaymentAmount;
   }
 
-  // ⚠️ У «Відправлено» пускаємо лише спаковане замовлення. Раніше тут вимагався
+  // ⚠️ Вимоги нижче стосуються перевізника, а не самовивозу: накладної, яку
+  // можна відстежити, у самовивозі немає в принципі, і спільна вимога посилки
+  // замикала такі замовлення в «Оплачено» назавжди — створити посилку нікуди, а
+  // без неї крок уперед не пускав.
+  //
+  // ⚠️ Питаємо «чи це САМОВИВІЗ», а не «чи це Нова пошта». У базі лежать
+  // замовлення зі старими написаннями типу доставки («НП» тощо), і звіряння з
+  // однією каноничною назвою тихо зняло б вимогу ТТН з усіх них — найгірший
+  // різновид помилки: нічого не ламається, просто перевірки більше немає.
+  // Невідомий тип доставки лишається суворим; вільним стає лише той, що
+  // самовивозом назвався прямо.
+  const черезПошту = current.deliveryType !== САМОВИВІЗ;
+
+  // У «Відправлено» пускаємо лише спаковане замовлення. Раніше тут вимагався
   // номер ТТН; тепер номери живуть у посилках, і питання стало прямішим: чи є
   // що відправляти. Пакують посилки в картці замовлення — секція доступна вже
   // з «Оплачено».
   const єПосилки = (current.parcels || []).some(parcel => parcel.ttn);
 
-  if (status === ORDER_STATUS.SHIPPED && !єПосилки) {
+  if (status === ORDER_STATUS.SHIPPED && черезПошту && !єПосилки) {
     throw HttpError(
       400,
       'Для статусу «Відправлено» потрібна хоча б одна посилка з номером ТТН'
+    );
+  }
+
+  // ⚠️ «Доставлено» РУКАМИ — лише коли Пошта підтвердила ВСІ посилки.
+  //
+  // Цей шлях проходить менеджер; автоматичний перехід живе в крон-джобі
+  // (jobs/npTrackingJob.js), пише статус напряму через order.save() і сюди не
+  // заходить — тобто ця перевірка його не стосується.
+  //
+  // Сенс: доставлене замовлення — кінцевий стан, з нього немає дороги назад
+  // (isTransitionAllowed), і воно ж закриває статистику. Поставити його
+  // наперед, «бо клієнту вже подзвонили», означає втратити і повернення, і
+  // справжню дату вручення.
+  //
+  // ⚠️ Замовлення БЕЗ посилок не блокуємо: такі лишились з часів до посилок,
+  // і перевіряти в них нема чого — інакше вони не закрились би ніколи.
+  if (
+    status === ORDER_STATUS.DELIVERED &&
+    current.status !== ORDER_STATUS.DELIVERED &&
+    черезПошту &&
+    (current.parcels || []).length > 0 &&
+    !allParcelsDelivered(current)
+  ) {
+    const усього = current.parcels.length;
+    const отримано = deliveredCount(current);
+
+    throw HttpError(
+      400,
+      усього > 1
+        ? `Нова Пошта підтвердила отримання ${отримано} з ${усього} посилок. ` +
+            'Статус «Доставлено» проставиться сам, коли приїдуть усі'
+        : 'Нова Пошта ще не підтвердила отримання. ' +
+            'Статус «Доставлено» проставиться сам, щойно клієнт забере посилку'
     );
   }
 
@@ -1909,6 +1958,7 @@ async function створитиНакладну({ order, settings, manual, ад�
   const recipient = await ensureRecipient({
     firstName: отримувач.firstName,
     lastName: отримувач.lastName,
+    middleName: отримувач.middleName,
     phone: отримувач.phone,
   });
 
@@ -1962,30 +2012,82 @@ function розібратиОтримувача(order, recipient = {}) {
     };
   }
 
-  const name = String(recipient.name || '').trim();
-  const phone = String(recipient.phone || '').trim();
   const cityName = String(recipient.cityName || '').trim();
   const warehouseName = String(recipient.warehouseName || '').trim();
 
-  if (!name || !phone || !cityName || !warehouseName) {
+  // ⚠️ ПІБ приходить ТРЬОМА полями. Раніше це був один рядок, який ділився по
+  // першому пробілу («прізвище — решта»), тож «Іван Петренко» давало прізвище
+  // Іван та ім'я Петренко. Накладна виписувалась на неіснуючу людину, і
+  // з'ясовувалось це у відділенні, куди клієнт уже приїхав.
+  //
+  // Старий однорядковий `name` ще приймаємо: адмінка деплоїться окремо, і поки
+  // вона стара, посилки мусять створюватись.
+  const { lastName, firstName, middleName } = розібратиПІБ(recipient);
+
+  const сирийТелефон = String(recipient.phone || '').trim();
+
+  // ⚠️ Спершу — чи все ЗАПОВНЕНО, одним повідомленням. Півзаповнена адреса
+  // гірша за жодну: Пошта створить накладну на когось не того, і це коштує
+  // грошей. Скаржитись на поля по черзі означало б водити менеджера по формі
+  // кругами.
+  if (!lastName || !firstName || !сирийТелефон || !cityName || !warehouseName) {
     throw HttpError(
       400,
-      'Для іншої адреси потрібні імʼя, телефон, місто й відділення'
+      'Для іншої адреси потрібні прізвище, імʼя, телефон, місто й відділення'
     );
   }
 
-  // Ім'я з одного рядка ділимо навпіл: Пошта хоче прізвище й ім'я окремо, а
-  // менеджер вводить так, як звик писати.
-  const частини = name.split(/\s+/);
+  // І лише потім — чи телефон узагалі телефон.
+  //
+  // ⚠️ Кажемо, ЯКИЙ номер очікуємо. «Невірний телефон» лишає менеджера гадати,
+  // чи справа в пробілах, чи в коді країни.
+  const phone = toUaPhone(сирийТелефон);
+
+  if (!phone) {
+    throw HttpError(
+      400,
+      'Телефон отримувача має бути українським номером, напр. +380671234567'
+    );
+  }
+
+  const name = [lastName, firstName, middleName].filter(Boolean).join(' ');
 
   return {
-    recipient: { useClientAddress: false, name, phone, cityName, warehouseName },
-    адреса: { cityName, warehouseName },
-    отримувач: {
-      lastName: частини[0],
-      firstName: частини.slice(1).join(' ') || частини[0],
+    recipient: {
+      useClientAddress: false,
+      lastName,
+      firstName,
+      middleName,
+      name,
       phone,
+      cityName,
+      warehouseName,
     },
+    адреса: { cityName, warehouseName },
+    отримувач: { lastName, firstName, middleName, phone },
+  };
+}
+
+// ПІБ отримувача з тіла запиту.
+//
+// Нова адмінка шле три поля. Стара шле один рядок `name` — його ділимо як
+// раніше, щоб посилки створювались і до її викладки.
+function розібратиПІБ(recipient) {
+  const поле = ключ => String(recipient[ключ] || '').trim().replace(/\s+/g, ' ');
+
+  const lastName = поле('lastName');
+  const firstName = поле('firstName');
+
+  if (lastName || firstName) {
+    return { lastName, firstName, middleName: поле('middleName') };
+  }
+
+  const частини = поле('name').split(' ').filter(Boolean);
+
+  return {
+    lastName: частини[0] || '',
+    firstName: частини[1] || частини[0] || '',
+    middleName: частини.slice(2).join(' '),
   };
 }
 
@@ -2042,9 +2144,17 @@ const createOrderParcel = async (req, res) => {
   // Наложка — рівно та, яку ввів менеджер. Автоматичної підказки тут немає
   // свідомо: при кількох коробках ділити суму замовлення між ними може лише
   // людина.
+  // ⚠️ Накладений платіж має сенс ЛИШЕ для замовлень із таким способом оплати.
+  // Решта вже оплачені, і зібрати з клієнта гроші ще раз — це стягнути двічі.
+  // Адмінка поля для них навіть не показує; тут — щоб цей шлях не лишався
+  // відкритим із будь-якого іншого клієнта.
   const наложка = Number(codAmount);
 
-  if (Number.isFinite(наложка) && наложка > 0) {
+  if (
+    order.payment === CASH_ON_DELIVERY &&
+    Number.isFinite(наложка) &&
+    наложка > 0
+  ) {
     посилка.codAmount = Math.round(наложка);
   }
 
