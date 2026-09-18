@@ -43,6 +43,9 @@ router.put('/settings', authAdm, ctrl.updateShopSettings);
 
 // Довідник відправників Нової Пошти для налаштувань (контрагенти + контакти).
 router.get('/np/senders', authAdm, ctrl.getNovaPoshtaSenders);
+// Коли крон трекінгу проходив востаннє і чим закінчив. Без цього «Пошта не
+// оновлює статуси» і «крон не запускався» виглядають однаково.
+router.get('/np/tracking-status', authAdm, ctrl.getNpTrackingStatus);
 
 // Посилки замовлення: формування накладних, скидання, контроль повноти.
 //

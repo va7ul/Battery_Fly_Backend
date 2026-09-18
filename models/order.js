@@ -287,7 +287,11 @@ const orderSchema = new Schema(
             type: [
                 new Schema(
                     {
-                        ttn: { type: String, default: null },
+                        // ⚠️ trim на рівні схеми: номер із пробілом Пошта
+                        // опитує (там ми його обрізаємо), але зіставити
+                        // відповідь назад із таким записом уже не виходило, і
+                        // посилка мовчки лишалась без статусу назавжди.
+                        ttn: { type: String, default: null, trim: true },
                         // Ref накладної — потрібен, щоб її видалити.
                         ttnRef: { type: String, default: null },
                         // Згенерована через API чи вписана менеджером руками.
