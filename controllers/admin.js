@@ -2116,8 +2116,12 @@ const getNpTrackingStatus = async (req, res) => {
 
   // Скільки посилок зараз чекають на статус — щоб було з чим порівняти
   // «перевірено N» з останнього проходу.
+  // ⚠️ Той самий набір статусів, що й у вибірці крона (jobs/npTrackingJob.js).
+  // Розійдуться — цифра тут почне розповідати не про той прохід.
   const активні = await Order.countDocuments({
-    status: { $in: [ORDER_STATUS.PAID, ORDER_STATUS.SHIPPED] },
+    status: {
+      $in: [ORDER_STATUS.PAID, ORDER_STATUS.SHIPPED, ORDER_STATUS.DELIVERED],
+    },
     parcels: { $elemMatch: { ttn: { $nin: [null, ''] } } },
   });
 
