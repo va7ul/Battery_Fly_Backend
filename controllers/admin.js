@@ -35,6 +35,12 @@ const { normalizePhone, toUaPhone } = require('../helpers/phone');
 // Статус накладної потрібен перед скиданням ТТН: тихо скидаємо лише те, що
 // напевно мертве (див. resetOrderParcel).
 const { getTrackingBatch } = require('../helpers/npTracking');
+const { CronLock } = require('../models/cronLock');
+const { ЗАМОК: ЗАМОК_ТРЕКІНГУ } = require('../jobs/npTrackingJob');
+const {
+  РОЗКЛАД: РОЗКЛАД_ТРЕКІНГУ,
+  ЧАСОВИЙ_ПОЯС: ЧАСОВИЙ_ПОЯС_ТРЕКІНГУ,
+} = require('../jobs/scheduler');
 const {
   getFulfillment,
   перевіритиПозиції,
@@ -2091,6 +2097,43 @@ function розібратиПІБ(recipient) {
   };
 }
 
+// Стан трекінгу Нової Пошти.
+//
+// ⚠️ Навіщо окрема ручка. Крон живе ВСЕРЕДИНІ веб-процесу: якщо процес спить,
+// перезапускається чи впав, щогодинний прохід просто не відбувається — мовчки.
+// Зовні це виглядає не як поломка, а як «Пошта не оновлює статуси», і відрізнити
+// одне від одного не було жодного способу, крім читання логів Render. Тепер
+// видно дату останнього проходу і його підсумок.
+const getNpTrackingStatus = async (req, res) => {
+  const { token } = req.user;
+  const admin = await Admin.findOne({ token });
+
+  if (!admin) {
+    throw HttpError(404, 'Not Found');
+  }
+
+  const lock = await CronLock.findById(ЗАМОК_ТРЕКІНГУ).lean();
+
+  // Скільки посилок зараз чекають на статус — щоб було з чим порівняти
+  // «перевірено N» з останнього проходу.
+  const активні = await Order.countDocuments({
+    status: { $in: [ORDER_STATUS.PAID, ORDER_STATUS.SHIPPED] },
+    parcels: { $elemMatch: { ttn: { $nin: [null, ''] } } },
+  });
+
+  res.status(200).json({
+    result: {
+      schedule: РОЗКЛАД_ТРЕКІНГУ,
+      timezone: ЧАСОВИЙ_ПОЯС_ТРЕКІНГУ,
+      running: Boolean(lock && lock.running),
+      startedAt: (lock && lock.startedAt) || null,
+      finishedAt: (lock && lock.finishedAt) || null,
+      lastResult: (lock && lock.lastResult) || '',
+      activeOrders: активні,
+    },
+  });
+};
+
 // Додати посилку до замовлення.
 const createOrderParcel = async (req, res) => {
   const { token } = req.user;
@@ -2838,6 +2881,8 @@ const reorderProducts = async (req, res) => {
 };
 
 module.exports = {
+  getNpTrackingStatus,
+
 
   login: ctrlWrapper(login),
   logout: ctrlWrapper(logout),
